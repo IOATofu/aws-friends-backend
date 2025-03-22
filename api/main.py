@@ -26,11 +26,6 @@ async def get_instances():
     return getInfo()
 
 
-@app.post("/instances/profile")
-async def instance_profile(text: str = Form()):
-    return {"name": "Sample Instance Name"}
-
-
 @app.get("/alb")
 async def get_albs():
     """ALBの一覧を取得するエンドポイント"""
@@ -43,11 +38,6 @@ async def get_loadstate():
         "arn": "(arn)",
         "level": "low",
     }
-
-
-@app.put("/load-state")
-async def put_loadstate(text: str = Form()):
-    return {"message": "load-state"}
 
 
 if __name__ == "__main__":
