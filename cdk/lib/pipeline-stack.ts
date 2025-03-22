@@ -78,10 +78,7 @@ export class PipelineStack extends cdk.Stack {
               'echo Build completed on `date`',
               'echo Pushing the Docker image...',
               'docker push $REPOSITORY_URI:$IMAGE_TAG',
-              'docker push $REPOSITORY_URI:latest',
-              'echo Writing image definitions file...',
-              'echo "[{\"name\":\"ApiContainer\",\"imageUri\":\"$REPOSITORY_URI:$IMAGE_TAG\"}]" > imageDefinitions.json',
-              'cat imageDefinitions.json'
+              'docker push $REPOSITORY_URI:latest'
             ]
           }
         },
