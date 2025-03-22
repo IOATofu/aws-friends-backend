@@ -86,11 +86,11 @@ def get_latest_alb_metrics(
 
     # 収集するメトリクス（全てのメトリクスを取得）
     metric_configs = [
-        ("RequestCount", "Count", "request_count"),
-        ("TargetResponseTime", "Seconds", "target_response_time"),
-        ("HTTPCode_Target_4XX_Count", "Count", "http_code_target_4xx_count"),
-        ("HTTPCode_Target_5XX_Count", "Count", "http_code_target_5xx_count"),
-        ("HealthyHostCount", "Count", "healthy_host_count"),
+        ("RequestCount", "Count", "request_count", "Sum"),  # リクエスト数は合計値
+        ("TargetResponseTime", "Seconds", "target_response_time", "Average"),
+        ("HTTPCode_Target_4XX_Count", "Count", "http_code_target_4xx_count", "Average"),
+        ("HTTPCode_Target_5XX_Count", "Count", "http_code_target_5xx_count", "Average"),
+        ("HealthyHostCount", "Count", "healthy_host_count", "Average"),
     ]
 
     # 各ALBのメトリクスをバッチで取得
@@ -107,7 +107,7 @@ def get_latest_alb_metrics(
 
         # バッチ処理用のメトリクスクエリを準備
         metric_queries = []
-        for i, (metric_name, unit, _) in enumerate(metric_configs):
+        for i, (metric_name, unit, _, stat) in enumerate(metric_configs):
             metric_queries.append(
                 {
                     "Id": f"m{i}",
@@ -120,7 +120,7 @@ def get_latest_alb_metrics(
                             ],
                         },
                         "Period": 60,  # 1分間隔（高速化）
-                        "Stat": "Average",
+                        "Stat": stat,
                         "Unit": unit,
                     },
                 }
@@ -146,7 +146,7 @@ def get_latest_alb_metrics(
         latest_timestamp = None
 
         # 各メトリクスの結果を処理
-        for i, (_, _, metric_key) in enumerate(metric_configs):
+        for i, (_, _, metric_key, _) in enumerate(metric_configs):
             result = metrics_response["MetricDataResults"][i]
 
             if result["Values"]:
