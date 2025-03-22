@@ -1,5 +1,4 @@
 from fastapi import FastAPI, File, UploadFile, Form
-import getAws as getAws
 import uvicorn
 
 app = FastAPI()
@@ -24,6 +23,7 @@ async def instance_profile(text: str = Form()):
 async def get_loadstate():
     return {"message": "load-state"}
 
+
 @app.put("/load-state")
-async def put_loadstate():
+async def put_loadstate(text: str = Form()):
     return {"message": "load-state"}
