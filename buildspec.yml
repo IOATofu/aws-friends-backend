@@ -13,18 +13,16 @@ phases:
       - echo Build started on `date`
       - echo Building the Docker image...
       - docker build -t ${REPOSITORY_URI}:${IMAGE_TAG} -f docker/api/Dockerfile .
-      # latestタグは作成しない
+      - docker tag ${REPOSITORY_URI}:${IMAGE_TAG} ${REPOSITORY_URI}:latest
   
   post_build:
     commands:
       - echo Build completed on `date`
       - echo Pushing the Docker image...
       - docker push ${REPOSITORY_URI}:${IMAGE_TAG}
-      # latestタグはプッシュしない
-      - echo Writing image definitions file with specific tag...
-      - echo "[{\"name\":\"api-container\",\"imageUri\":\"${REPOSITORY_URI}:${IMAGE_TAG}\"}]" > imageDefinitions.json
-      - cat imageDefinitions.json
-      - cat imageDefinitions.json
+      - docker push ${REPOSITORY_URI}:latest
+      - echo Writing image definitions file...
+      - printf '[{"name":"ApiContainer","imageUri":"%s"}]' "${REPOSITORY_URI}:${IMAGE_TAG}" > imageDefinitions.json
 
 artifacts:
   files:

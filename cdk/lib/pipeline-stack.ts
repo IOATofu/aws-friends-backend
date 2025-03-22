@@ -9,6 +9,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as codestarconnections from 'aws-cdk-lib/aws-codestarconnections';
 import { Construct } from 'constructs';
 
 interface PipelineStackProps extends cdk.StackProps {
@@ -26,46 +27,83 @@ export class PipelineStack extends cdk.Stack {
       pipelineName: 'EcsDeployPipeline',
     });
 
-    // ソースステージ（ECRソース）
+    // ソースステージ（GitHubソース）
     const sourceOutput = new codepipeline.Artifact();
 
-    // イメージダイジェストを取得するLambda関数は不要なので削除
-
-    // ECRソースアクション（イメージタグを使用）
-    const sourceAction = new codepipeline_actions.EcrSourceAction({
-      actionName: 'ECR',
-      repository: props.ecrRepository,
-      imageTag: 'latest', // ビルド成功時に使用するタグ
-      output: sourceOutput,
+    // GitHub接続の作成（AWS CodeStar接続を使用）
+    const githubConnection = new codestarconnections.CfnConnection(this, 'GitHubConnection', {
+      connectionName: 'GitHubConnection',
+      providerType: 'GitHub',
     });
 
-    // イメージ定義ファイルを生成するCodeBuildプロジェクト
-    const buildProject = new codebuild.PipelineProject(this, 'ImageDefinitionsProject', {
+    // GitHubソースアクション
+    const sourceAction = new codepipeline_actions.CodeStarConnectionsSourceAction({
+      actionName: 'GitHub',
+      owner: 'IOATofu',
+      repo: 'aws-friends-backend',
+      branch: 'main',
+      connectionArn: githubConnection.attrConnectionArn,
+      output: sourceOutput,
+      triggerOnPush: true,
+    });
+
+    // Dockerイメージをビルドしてプッシュするビルドプロジェクト
+    const buildProject = new codebuild.PipelineProject(this, 'BuildProject', {
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
-        privileged: true,
+        privileged: true, // Dockerビルドに必要
       },
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
         phases: {
+          pre_build: {
+            commands: [
+              'echo Logging in to Amazon ECR...',
+              'aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com',
+              'REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME',
+              'COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)',
+              'IMAGE_TAG=${COMMIT_HASH:=latest}'
+            ]
+          },
           build: {
             commands: [
-              'echo Creating image definitions file with specific tag',
-              'echo \'[{"name":"ApiContainer","imageUri":"\'$ECR_REPOSITORY_URI\':latest"}]\' > imageDefinitions.json',
-              'cat imageDefinitions.json',
-            ],
+              'echo Build started on `date`',
+              'echo Building the Docker image...',
+              'docker build -t $REPOSITORY_URI:$IMAGE_TAG -f docker/api/Dockerfile .',
+              'docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:latest'
+            ]
           },
+          post_build: {
+            commands: [
+              'echo Build completed on `date`',
+              'echo Pushing the Docker image...',
+              'docker push $REPOSITORY_URI:$IMAGE_TAG',
+              'docker push $REPOSITORY_URI:latest',
+              'echo Writing image definitions file...',
+              'echo "[{\"name\":\"ApiContainer\",\"imageUri\":\"$REPOSITORY_URI:$IMAGE_TAG\"}]" > imageDefinitions.json',
+              'cat imageDefinitions.json'
+            ]
+          }
         },
         artifacts: {
-          files: ['imageDefinitions.json'],
-        },
-        env: {
-          variables: {
-            ECR_REPOSITORY_URI: props.ecrRepository.repositoryUri
-          }
+          files: ['imageDefinitions.json']
         }
       }),
+      environmentVariables: {
+        'AWS_ACCOUNT_ID': {
+          value: process.env.CDK_DEFAULT_ACCOUNT || this.account
+        },
+        'AWS_DEFAULT_REGION': {
+          value: process.env.CDK_DEFAULT_REGION || this.region
+        },
+        'ECR_REPOSITORY_NAME': {
+          value: props.ecrRepository.repositoryName
+        }
+      }
     });
+
+    // ECRへのプッシュ権限を付与
+    props.ecrRepository.grantPullPush(buildProject);
 
     const buildOutput = new codepipeline.Artifact();
     const buildAction = new codepipeline_actions.CodeBuildAction({
@@ -79,7 +117,7 @@ export class PipelineStack extends cdk.Stack {
     const deployAction = new codepipeline_actions.EcsDeployAction({
       actionName: 'Deploy',
       service: props.ecsService,
-      imageFile: buildOutput.atPath('imageDefinitions.json')
+      imageFile: buildOutput.atPath('imageDefinitions.json'),
     });
 
     // パイプラインにステージを追加
