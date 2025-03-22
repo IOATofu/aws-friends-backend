@@ -38,7 +38,7 @@ def get_alb_list() -> List[Dict[str, str]]:
 
 
 def get_latest_alb_metrics(
-    minutes_range: int = 30, delay_minutes: int = 2
+    minutes_range: int = 180, delay_minutes: int = 2
 ) -> List[Dict[str, Union[str, float, datetime.datetime, Dict]]]:
     """
     すべてのApplication Load Balancerの最新メトリクスを取得します。
@@ -86,7 +86,16 @@ def get_latest_alb_metrics(
             continue
 
         load_balancer_name = alb["LoadBalancerName"]
-        load_balancer_Arn = alb["LoadBalancerArn"],
+        load_balancer_arn = alb["LoadBalancerArn"]  # カンマを削除
+
+        # デバッグ情報
+        print(f"処理中のALB: {load_balancer_name}")
+        print(f"ARN: {load_balancer_arn}")
+        print(f"ARN分割後: {load_balancer_arn.split('/')}")
+        print(
+            f"ディメンション値: {load_balancer_arn.split('/')[-2] + '/' + load_balancer_arn.split('/')[-1]}"
+        )
+
         metrics_data = {
             "request_count": None,
             "target_response_time": None,
@@ -104,7 +113,7 @@ def get_latest_alb_metrics(
                 Dimensions=[
                     {
                         "Name": "LoadBalancer",
-                        "Value": alb["LoadBalancerArn"].split("/")[-1],
+                        "Value": "/".join(load_balancer_arn.split("/")[1:]),
                     },
                 ],
                 StartTime=start_time,
@@ -140,7 +149,7 @@ def get_latest_alb_metrics(
         alb_metrics.append(
             {
                 "load_balancer_name": load_balancer_name,
-                "load_balancer_arn": load_balancer_Arn[0],
+                "load_balancer_arn": load_balancer_arn,  # 変数名を修正
                 "metrics": metrics_data,
                 "timestamp": latest_timestamp,
             }
@@ -149,8 +158,8 @@ def get_latest_alb_metrics(
 
 
 if __name__ == "__main__":
-    # 使用例
-    metrics = get_latest_alb_metrics()
+    # 使用例 - 過去3時間のデータを取得
+    metrics = get_latest_alb_metrics(minutes_range=180)
     for metric in metrics:
         print(f"\nALB: {metric['load_balancer_name']}")
         print(f"Timestamp: {metric['timestamp']}")
