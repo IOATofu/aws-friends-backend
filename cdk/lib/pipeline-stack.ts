@@ -31,7 +31,7 @@ export class PipelineStack extends cdk.Stack {
 
     // ECRリポジトリからイメージダイジェストを取得するLambda関数
     const getImageDigestLambda = new lambda.Function(this, 'GetImageDigestLambda', {
-      runtime: lambda.Runtime.NODEJS_14_X,
+      runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
