@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, Form
 from instance.get_instaces_info import getInfo
+from instance.alb import get_alb_list
 import uvicorn
 
 app = FastAPI()
@@ -30,6 +31,12 @@ async def instance_profile(text: str = Form()):
     return {"name": "Sample Instance Name"}
 
 
+@app.get("/alb")
+async def get_albs():
+    """ALBの一覧を取得するエンドポイント"""
+    return get_alb_list()
+
+
 @app.get("/load-state")
 async def get_loadstate():
     return {
@@ -41,6 +48,7 @@ async def get_loadstate():
 @app.put("/load-state")
 async def put_loadstate(text: str = Form()):
     return {"message": "load-state"}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8080, log_level="debug")
