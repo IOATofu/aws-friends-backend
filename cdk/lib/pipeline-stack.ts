@@ -22,21 +22,19 @@ export class PipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PipelineStackProps) {
     super(scope, id, props);
 
-    // パイプラインの作成
-    const pipeline = new codepipeline.Pipeline(this, 'DeployPipeline', {
-      pipelineName: 'EcsDeployPipeline',
-    });
-
-    // ソースステージ（GitHubソース）
-    const sourceOutput = new codepipeline.Artifact();
-
-    // GitHub接続の作成（AWS CodeStar接続を使用）
+    // GitHub接続の作成
     const githubConnection = new codestarconnections.CfnConnection(this, 'GitHubConnection', {
       connectionName: 'GitHubConnection',
       providerType: 'GitHub',
     });
 
-    // GitHubソースアクション
+    // ビルドパイプラインの作成
+    const buildPipeline = new codepipeline.Pipeline(this, 'BuildPipeline', {
+      pipelineName: 'EcsBuildPipeline',
+    });
+
+    // ソースステージ（GitHubソース）
+    const sourceOutput = new codepipeline.Artifact();
     const sourceAction = new codepipeline_actions.CodeStarConnectionsSourceAction({
       actionName: 'GitHub',
       owner: 'IOATofu',
@@ -51,41 +49,9 @@ export class PipelineStack extends cdk.Stack {
     const buildProject = new codebuild.PipelineProject(this, 'BuildProject', {
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
-        privileged: true, // Dockerビルドに必要
+        privileged: true,
       },
-      buildSpec: codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          pre_build: {
-            commands: [
-              'echo Logging in to Amazon ECR...',
-              'aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com',
-              'REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME',
-              'COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)',
-              'IMAGE_TAG=${COMMIT_HASH:=latest}'
-            ]
-          },
-          build: {
-            commands: [
-              'echo Build started on `date`',
-              'echo Building the Docker image...',
-              'docker build -t $REPOSITORY_URI:$IMAGE_TAG -f docker/api/Dockerfile .',
-              'docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:latest'
-            ]
-          },
-          post_build: {
-            commands: [
-              'echo Build completed on `date`',
-              'echo Pushing the Docker image...',
-              'docker push $REPOSITORY_URI:$IMAGE_TAG',
-              'docker push $REPOSITORY_URI:latest'
-            ]
-          }
-        },
-        artifacts: {
-          files: ['imageDefinitions.json']
-        }
-      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspec-build.yml'),
       environmentVariables: {
         'AWS_ACCOUNT_ID': {
           value: process.env.CDK_DEFAULT_ACCOUNT || this.account
@@ -99,50 +65,107 @@ export class PipelineStack extends cdk.Stack {
       }
     });
 
-    // ECRへのプッシュ権限を付与
     props.ecrRepository.grantPullPush(buildProject);
 
-    const buildOutput = new codepipeline.Artifact();
     const buildAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'CreateImageDefinitions',
+      actionName: 'BuildAndPushImage',
       project: buildProject,
       input: sourceOutput,
-      outputs: [buildOutput],
+    });
+
+    // ビルドパイプラインにステージを追加
+    buildPipeline.addStage({
+      stageName: 'Source',
+      actions: [sourceAction],
+    });
+
+    buildPipeline.addStage({
+      stageName: 'Build',
+      actions: [buildAction],
+    });
+
+    // デプロイパイプラインの作成
+    const deployPipeline = new codepipeline.Pipeline(this, 'DeployPipeline', {
+      pipelineName: 'EcsDeployPipeline',
+    });
+
+    // デプロイ用のビルドプロジェクト
+    const deployProject = new codebuild.PipelineProject(this, 'DeployProject', {
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspec-deploy.yml'),
+      environmentVariables: {
+        'ECR_REPOSITORY_URI': {
+          value: props.ecrRepository.repositoryUri
+        }
+      }
+    });
+
+    const deployOutput = new codepipeline.Artifact();
+    const createImageDefAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'CreateImageDefinitions',
+      project: deployProject,
+      input: sourceOutput,
+      outputs: [deployOutput],
     });
 
     // ECSデプロイアクション
     const deployAction = new codepipeline_actions.EcsDeployAction({
       actionName: 'Deploy',
       service: props.ecsService,
-      imageFile: buildOutput.atPath('imageDefinitions.json'),
+      imageFile: deployOutput.atPath('imageDefinitions.json'),
     });
 
-    // パイプラインにステージを追加
-    pipeline.addStage({
+    // デプロイパイプラインにステージを追加
+    deployPipeline.addStage({
       stageName: 'Source',
       actions: [sourceAction],
     });
 
-    pipeline.addStage({
-      stageName: 'Build',
-      actions: [buildAction],
+    deployPipeline.addStage({
+      stageName: 'CreateImageDef',
+      actions: [createImageDefAction],
     });
 
-    pipeline.addStage({
+    deployPipeline.addStage({
       stageName: 'Deploy',
       actions: [deployAction],
     });
 
-    // パイプラインが一定回数失敗したら自動的に停止する設定
+    // ECRイメージ更新時のイベントルール作成
+    const ecrImageRule = new events.Rule(this, 'EcrImageUpdateRule', {
+      eventPattern: {
+        source: ['aws.ecr'],
+        detailType: ['ECR Image Action'],
+        detail: {
+          'action-type': ['PUSH'],
+          'image-tag': ['latest'],
+          'repository-name': [props.ecrRepository.repositoryName],
+          result: ['SUCCESS']
+        }
+      }
+    });
 
-    // DynamoDBテーブルを作成して失敗回数を追跡
+    // デプロイパイプラインの実行権限を持つロールを作成
+    const pipelineExecutionRole = new iam.Role(this, 'PipelineExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('events.amazonaws.com'),
+    });
+
+    // パイプライン実行権限を付与
+    pipelineExecutionRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['codepipeline:StartPipelineExecution'],
+      resources: [deployPipeline.pipelineArn],
+    }));
+
+    // イベントルールのターゲットとしてデプロイパイプラインを追加
+    ecrImageRule.addTarget(new targets.CodePipeline(deployPipeline));
+
+    // パイプライン失敗監視用のDynamoDBテーブル
     const failureCountTable = new dynamodb.Table(this, 'PipelineFailureCountTable', {
       partitionKey: { name: 'pipelineName', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
-    // CloudWatchイベントルールを作成
+    // パイプライン失敗ハンドラー
     const pipelineFailureHandler = new lambda.Function(this, 'PipelineFailureHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
@@ -157,7 +180,6 @@ export class PipelineStack extends cdk.Stack {
           
           console.log(\`Pipeline \${pipelineName} execution \${executionId} failed\`);
           
-          // DynamoDBから失敗回数を取得
           const params = {
             TableName: process.env.FAILURE_COUNT_TABLE,
             Key: { pipelineName: pipelineName }
@@ -168,27 +190,23 @@ export class PipelineStack extends cdk.Stack {
           
           console.log(\`Current failure count: \${failureCount}\`);
           
-          // 失敗回数を更新
           await dynamodb.put({
             TableName: process.env.FAILURE_COUNT_TABLE,
             Item: { pipelineName: pipelineName, count: failureCount }
           }).promise();
           
-          // 指定回数以上失敗した場合、パイプラインを無効化
           if (failureCount >= parseInt(process.env.MAX_FAILURES)) {
             console.log(\`Disabling pipeline \${pipelineName} after \${failureCount} failures\`);
             
             await codepipeline.updatePipeline({
               pipeline: {
                 name: pipelineName,
-                // パイプラインを無効化するための設定
                 disabled: true
               }
             }).promise();
             
             console.log(\`Pipeline \${pipelineName} has been disabled\`);
             
-            // 失敗カウントをリセット
             await dynamodb.put({
               TableName: process.env.FAILURE_COUNT_TABLE,
               Item: { pipelineName: pipelineName, count: 0 }
@@ -198,7 +216,7 @@ export class PipelineStack extends cdk.Stack {
       `),
       environment: {
         FAILURE_COUNT_TABLE: failureCountTable.tableName,
-        MAX_FAILURES: '3' // 最大失敗回数
+        MAX_FAILURES: '3'
       },
       timeout: cdk.Duration.seconds(30)
     });
@@ -206,31 +224,47 @@ export class PipelineStack extends cdk.Stack {
     // Lambda関数にCodePipelineの更新権限を付与
     pipelineFailureHandler.addToRolePolicy(new iam.PolicyStatement({
       actions: ['codepipeline:UpdatePipeline', 'codepipeline:GetPipeline'],
-      resources: [pipeline.pipelineArn]
+      resources: [buildPipeline.pipelineArn, deployPipeline.pipelineArn]
     }));
 
     // DynamoDBテーブルへのアクセス権限を付与
     failureCountTable.grantReadWriteData(pipelineFailureHandler);
 
-    // CloudWatchイベントルールを作成
-    const pipelineFailureRule = new events.Rule(this, 'PipelineFailureRule', {
+    // パイプライン失敗時のイベントルール作成
+    const buildPipelineFailureRule = new events.Rule(this, 'BuildPipelineFailureRule', {
       eventPattern: {
         source: ['aws.codepipeline'],
         detailType: ['CodePipeline Pipeline Execution State Change'],
         detail: {
           state: ['FAILED'],
-          pipeline: [pipeline.pipelineName]
+          pipeline: [buildPipeline.pipelineName]
         }
       }
     });
 
-    // Lambda関数をイベントターゲットとして追加
-    pipelineFailureRule.addTarget(new targets.LambdaFunction(pipelineFailureHandler));
+    const deployPipelineFailureRule = new events.Rule(this, 'DeployPipelineFailureRule', {
+      eventPattern: {
+        source: ['aws.codepipeline'],
+        detailType: ['CodePipeline Pipeline Execution State Change'],
+        detail: {
+          state: ['FAILED'],
+          pipeline: [deployPipeline.pipelineName]
+        }
+      }
+    });
+
+    buildPipelineFailureRule.addTarget(new targets.LambdaFunction(pipelineFailureHandler));
+    deployPipelineFailureRule.addTarget(new targets.LambdaFunction(pipelineFailureHandler));
 
     // 出力の追加
-    new cdk.CfnOutput(this, 'PipelineName', {
-      value: pipeline.pipelineName,
-      description: 'CodePipeline name',
+    new cdk.CfnOutput(this, 'BuildPipelineName', {
+      value: buildPipeline.pipelineName,
+      description: 'Build CodePipeline name',
+    });
+
+    new cdk.CfnOutput(this, 'DeployPipelineName', {
+      value: deployPipeline.pipelineName,
+      description: 'Deploy CodePipeline name',
     });
   }
 }

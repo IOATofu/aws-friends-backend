@@ -1,0 +1,12 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - echo Creating image definitions file...
+      - echo "[{\"name\":\"ApiContainer\",\"imageUri\":\"${ECR_REPOSITORY_URI}:latest\"}]" > imageDefinitions.json
+      - cat imageDefinitions.json
+
+artifacts:
+  files:
+    - imageDefinitions.json
