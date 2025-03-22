@@ -26,7 +26,7 @@ def get_metrics_by_arn(arn: str):
     elif "rds" in arn:
         return get_latest_rds_metrics()
     else:
-        raise Exception(f"サポートされていないARNです: {arn}")
+        raise Exception(f"get_metrics_by_arn: サポートされていないARNです: {arn}")
 
 
 

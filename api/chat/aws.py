@@ -24,8 +24,8 @@ with open('/api/chat/prompts/alb.txt', 'r', encoding='utf-8') as f:
 with open('/api/chat/prompts/ec2.txt', 'r', encoding='utf-8') as f:
     ec2_prompt = f.read()
 
-with open('/api/chat/prompts/rdb.txt', 'r', encoding='utf-8') as f:
-    rdb_prompt = f.read()
+with open('/api/chat/prompts/rds.txt', 'r', encoding='utf-8') as f:
+    rds_prompt = f.read()
 
 class Chat:
     def __init__(self, debug=False):
@@ -180,9 +180,9 @@ def character_chat(arn,conversation_json,metrics, model_id="anthropic.claude-3-5
     elif "ec2" in arn:
         prompt = base_head_prompt + ec2_prompt + base_foot_prompt
     elif "rds" in arn:
-        prompt = base_head_prompt + rdb_prompt + base_foot_prompt
+        prompt = base_head_prompt + rds_prompt + base_foot_prompt
     else:
-        raise Exception(f"サポートされていないARNです: {arn}")
+        raise Exception(f"character_chat: サポートされていないARNです: {arn}")
     conversation_log=[{'role':x['role'],'content':x['message']} for x in conversation_json]
     chat_instance = Character(prompt=prompt, debug=debug)
     if conversation_log:
