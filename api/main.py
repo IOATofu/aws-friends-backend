@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-import getAws
+import api.getAws as getAws
 import uvicorn
 
 app = FastAPI()
@@ -11,9 +11,3 @@ async def root():
 @app.get("/getAwsInfo")
 async def getAwsInfo():
     return getAws.getInfo()
-
-def debug():
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="debug")
-
-if __name__ == "__main__":
-    debug()
