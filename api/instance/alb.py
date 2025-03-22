@@ -3,6 +3,40 @@ import datetime
 from typing import Dict, List, Optional, Union
 
 
+def get_alb_list() -> List[Dict[str, str]]:
+    """
+    すべてのApplication Load Balancerの一覧を取得します。
+
+    戻り値:
+        List[Dict]: ALBの情報を含む辞書のリスト:
+            - name (str): ALB名
+            - arn (str): ALBのARN
+            - dns_name (str): ALBのDNS名
+            - state (str): ALBの状態
+    """
+    elbv2 = boto3.client("elbv2")
+
+    # すべてのALBを取得
+    response = elbv2.describe_load_balancers()
+    alb_list = []
+
+    # 各ALBを処理
+    for alb in response["LoadBalancers"]:
+        if alb["Type"] != "application":
+            continue
+
+        alb_list.append(
+            {
+                "name": alb["LoadBalancerName"],
+                "arn": alb["LoadBalancerArn"],
+                "dns_name": alb["DNSName"],
+                "state": alb["State"]["Code"],
+            }
+        )
+
+    return alb_list
+
+
 def get_latest_alb_metrics(
     minutes_range: int = 30, delay_minutes: int = 2
 ) -> List[Dict[str, Union[str, float, datetime.datetime, Dict]]]:
