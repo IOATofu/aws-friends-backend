@@ -106,7 +106,7 @@ async def talk(data: dict = Body(...)):
         arn, message = character_chat(arn, log, metrics)
         return {
             "arn": arn,
-            "return": {
+            "return_message": {
                 "role": "assistant",
                 "message": message,
             },
