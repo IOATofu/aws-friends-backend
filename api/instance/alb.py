@@ -89,12 +89,12 @@ def get_latest_alb_metrics(
         load_balancer_arn = alb["LoadBalancerArn"]  # カンマを削除
 
         # デバッグ情報
-        print(f"処理中のALB: {load_balancer_name}")
-        print(f"ARN: {load_balancer_arn}")
-        print(f"ARN分割後: {load_balancer_arn.split('/')}")
-        print(
-            f"ディメンション値: {load_balancer_arn.split('/')[-2] + '/' + load_balancer_arn.split('/')[-1]}"
-        )
+        #print(f"処理中のALB: {load_balancer_name}")
+        #print(f"ARN: {load_balancer_arn}")
+        #print(f"ARN分割後: {load_balancer_arn.split('/')}")
+        #print(
+        #    f"ディメンション値: {load_balancer_arn.split('/')[-2] + '/' + load_balancer_arn.split('/')[-1]}"
+        #)
 
         metrics_data = {
             "request_count": None,

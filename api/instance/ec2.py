@@ -82,6 +82,9 @@ def get_latest_ec2_metrics(
     # 各インスタンスを処理
     for reservation in response["Reservations"]:
         for instance in reservation["Instances"]:
+            instance_name = next(
+                (d["Value"] for d in instance["Tags"] if d["Key"] == "Name"), None
+            )
             instance_id = instance["InstanceId"]
 
             # CloudWatchメトリクスを取得
@@ -107,6 +110,7 @@ def get_latest_ec2_metrics(
 
                 instance_metrics.append(
                     {
+                        "instance_name": instance_name,
                         "instance_id": instance_id,
                         "cpu_utilization": latest["Average"],
                         "timestamp": latest["Timestamp"],
@@ -116,6 +120,7 @@ def get_latest_ec2_metrics(
                 # データが見つからない場合、nullメトリクスでインスタンスを含める
                 instance_metrics.append(
                     {
+                        "instance_name": instance_name,
                         "instance_id": instance_id,
                         "cpu_utilization": None,
                         "timestamp": None,

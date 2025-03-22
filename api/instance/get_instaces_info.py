@@ -52,6 +52,7 @@ async def getInfo():
         metrics_data.append(
             {
                 "type": "ec2",
+                "name": metric["instance_name"],
                 "arn": arn,
                 "state": calc_ec2(metric["cpu_utilization"]),
                 "cost": cost_dict[arn],
@@ -65,9 +66,10 @@ async def getInfo():
         metrics_data.append(
             {
                 "type": "rds",
+                "name": metric["db_instance_identifier"],
                 "arn": arn,
                 "state": calc_rds(metric["metrics"]["cpu_utilization"]),
-                "cost": cost_dict[arn]
+                "cost": cost_dict[arn],
             }
         )
 
@@ -77,10 +79,9 @@ async def getInfo():
         metrics_data.append(
             {
                 "type": "alb",
+                "name": metric["load_balancer_name"],
                 "arn": arn,
-                "state": calc_alb(
-                    metric["metrics"]["target_response_time"]
-                ),
+                "state": calc_alb(metric["metrics"]["target_response_time"]),
                 "cost": cost_dict[arn],
             }
         )
