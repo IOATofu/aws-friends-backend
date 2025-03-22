@@ -10,7 +10,8 @@ REGION_TO_LOCATION = {
     "us-west-2": "US West (Oregon)",
     # 必要に応じて追加
 }
-
+def get_instance_costs():
+    return 0
 
 def get_ec2_price(
     instance_type: str, location: str, operating_system: str = "Linux"
