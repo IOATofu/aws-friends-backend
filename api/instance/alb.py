@@ -161,10 +161,14 @@ def get_latest_alb_metrics(
                 if latest_timestamp is None or latest_ts > latest_timestamp:
                     latest_timestamp = latest_ts
 
+        # ロードバランサーの状態を取得
+        lb_state = alb.get("State", {}).get("Code", "unknown")
+
         alb_metrics.append(
             {
                 "load_balancer_name": load_balancer_name,
                 "load_balancer_arn": load_balancer_arn,
+                "state": lb_state,  # ロードバランサーの状態を追加
                 "metrics": metrics_data,
                 "timestamp": latest_timestamp,
             }

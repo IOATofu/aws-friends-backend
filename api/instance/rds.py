@@ -127,9 +127,13 @@ def get_latest_rds_metrics(
                 if latest_timestamp is None or latest_ts > latest_timestamp:
                     latest_timestamp = latest_ts
 
+        # インスタンスのステータスを取得
+        db_instance_status = instance.get("DBInstanceStatus", "unknown")
+
         rds_metrics.append(
             {
                 "db_instance_identifier": db_instance_identifier,
+                "db_instance_status": db_instance_status,  # インスタンスのステータスを追加
                 "metrics": metrics_data,
                 "timestamp": latest_timestamp,
             }

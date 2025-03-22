@@ -169,20 +169,42 @@ def get_latest_ec2_metrics(
                 latest_value = result["Values"][0]
                 latest_ts = result["Timestamps"][0]
 
+                # 対応するインスタンスの状態を取得
+                instance_state = next(
+                    (
+                        inst["State"]
+                        for inst in instances
+                        if inst["InstanceId"] == instance_id
+                    ),
+                    "unknown",
+                )
+
                 all_metrics.append(
                     {
                         "instance_name": instance_name,
                         "instance_id": instance_id,
+                        "instance_state": instance_state,  # インスタンスの状態を追加
                         "cpu_utilization": latest_value,
                         "timestamp": latest_ts,
                     }
                 )
             else:
                 # データが見つからない場合
+                # 対応するインスタンスの状態を取得
+                instance_state = next(
+                    (
+                        inst["State"]
+                        for inst in instances
+                        if inst["InstanceId"] == instance_id
+                    ),
+                    "unknown",
+                )
+
                 all_metrics.append(
                     {
                         "instance_name": instance_name,
                         "instance_id": instance_id,
+                        "instance_state": instance_state,  # インスタンスの状態を追加
                         "cpu_utilization": None,
                         "timestamp": None,
                     }

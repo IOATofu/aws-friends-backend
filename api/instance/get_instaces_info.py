@@ -54,6 +54,25 @@ async def getInfo():
     ec2_metrics, rds_metrics, alb_metrics = await get_all_metrics_async()
     cost_dict = await get_cost_dict()
 
+    # デバッグ情報
+    print(f"取得したEC2メトリクス数: {len(ec2_metrics)}")
+    for i, metric in enumerate(ec2_metrics):
+        print(
+            f"EC2 {i+1}: ID={metric['instance_id']}, State={metric.get('instance_state', 'unknown')}"
+        )
+
+    print(f"取得したRDSメトリクス数: {len(rds_metrics)}")
+    for i, metric in enumerate(rds_metrics):
+        print(
+            f"RDS {i+1}: ID={metric['db_instance_identifier']}, Status={metric.get('db_instance_status', 'unknown')}"
+        )
+
+    print(f"取得したALBメトリクス数: {len(alb_metrics)}")
+    for i, metric in enumerate(alb_metrics):
+        print(
+            f"ALB {i+1}: Name={metric['load_balancer_name']}, State={metric.get('state', 'unknown')}"
+        )
+
     # EC2メトリクスの処理 - 起動中のインスタンスのみ
     for metric in ec2_metrics:
         instance_id = metric["instance_id"]
