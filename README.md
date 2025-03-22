@@ -1,6 +1,10 @@
-# Progate Hackathon Backend
+# AWSフレンズ
 
-![ロゴ](./img/AWS.png)
+![ロゴ](./img/thumnail.png)
+
+## アプリの様子
+![画面1](./img/sample1.png)
+![画面2](./img/sample2.png)
 
 ## uvの使い方
 1. 環境の作成
