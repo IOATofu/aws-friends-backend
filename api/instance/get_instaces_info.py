@@ -6,16 +6,23 @@ from .alb import get_latest_alb_metrics
 from .calc_state import calc_ec2, calc_rds, calc_alb
 from .cost import estimate_realtime_cost_by_arn
 
+# メトリクス取得の時間範囲設定
+minutes_range = 15  # 15分間のデータのみ取得
+delay_minutes = 0  # 遅延なし
+
 
 async def get_all_metrics_async():
     """
     EC2、RDS、ALBのメトリクスを非同期で並列取得します。
+    最適化された時間範囲設定を使用します。
     """
-    # 非同期タスクを作成
+    print(f"メトリクス取得開始: 最適化モード（過去{minutes_range}分間のデータ）")
+
+    # 非同期タスクを作成 - グローバル設定の時間範囲を使用
     tasks = [
-        asyncio.to_thread(get_latest_ec2_metrics),
-        asyncio.to_thread(get_latest_rds_metrics),
-        asyncio.to_thread(get_latest_alb_metrics),
+        asyncio.to_thread(get_latest_ec2_metrics, minutes_range, delay_minutes),
+        asyncio.to_thread(get_latest_rds_metrics, minutes_range, delay_minutes),
+        asyncio.to_thread(get_latest_alb_metrics, minutes_range, delay_minutes),
     ]
 
     # 並列実行して結果を取得
@@ -23,12 +30,14 @@ async def get_all_metrics_async():
 
     return ec2_metrics, rds_metrics, alb_metrics
 
+
 async def get_cost_dict():
     return_dict = {}
     tmp_dict = await estimate_realtime_cost_by_arn()
     for tmp in tmp_dict:
         return_dict[tmp["instance_arn"]] = tmp["cost"]
     return return_dict
+
 
 async def getInfo():
     metrics_data = []
@@ -67,7 +76,7 @@ async def getInfo():
                 "type": "rds",
                 "arn": arn,
                 "state": calc_rds(metric["metrics"]["cpu_utilization"]),
-                "cost": cost_dict[arn]
+                "cost": cost_dict[arn],
             }
         )
 
@@ -78,9 +87,7 @@ async def getInfo():
             {
                 "type": "alb",
                 "arn": arn,
-                "state": calc_alb(
-                    metric["metrics"]["target_response_time"]
-                ),
+                "state": calc_alb(metric["metrics"]["target_response_time"]),
                 "cost": cost_dict[arn],
             }
         )
