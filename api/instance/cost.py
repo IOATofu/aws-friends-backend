@@ -3,7 +3,6 @@ import json
 import asyncio
 from datetime import datetime
 from typing import Dict, List
-from functools import lru_cache
 
 # リージョンコードから Pricing API 用の location 名のマッピング例
 REGION_TO_LOCATION = {
@@ -12,6 +11,11 @@ REGION_TO_LOCATION = {
     "us-west-2": "US West (Oregon)",
     # 必要に応じて追加
 }
+
+# 価格情報のキャッシュ
+ec2_price_cache = {}
+rds_price_cache = {}
+alb_price_cache = {}
 
 
 async def get_instance_costs(days: int = 30):
@@ -26,14 +30,19 @@ async def get_instance_costs(days: int = 30):
     return await estimate_realtime_cost_by_arn()
 
 
-@lru_cache(maxsize=100)
 async def get_ec2_price(
     instance_type: str, location: str, operating_system: str = "Linux"
 ) -> float:
     """
     Pricing API を用いて、EC2 の指定インスタンスタイプのオンデマンド料金（USD/時）を取得する。
     """
-    async with aioboto3.client("pricing", region_name="us-east-1") as pricing:
+    # キャッシュをチェック
+    cache_key = f"{instance_type}:{location}:{operating_system}"
+    if cache_key in ec2_price_cache:
+        return ec2_price_cache[cache_key]
+
+    session = aioboto3.Session()
+    async with session.client("pricing", region_name="us-east-1") as pricing:
         try:
             response = await pricing.get_products(
                 ServiceCode="AmazonEC2",
@@ -61,13 +70,14 @@ async def get_ec2_price(
                 on_demand = next(iter(price_item["terms"]["OnDemand"].values()))
                 price_dimensions = next(iter(on_demand["priceDimensions"].values()))
                 price_per_hour = float(price_dimensions["pricePerUnit"]["USD"])
+                # キャッシュに保存
+                ec2_price_cache[cache_key] = price_per_hour
                 return price_per_hour
         except Exception as e:
             print(f"EC2 料金取得エラー: {e}")
         return 0.0
 
 
-@lru_cache(maxsize=100)
 async def get_rds_price(
     instance_class: str, location: str, engine: str = "MySQL"
 ) -> float:
@@ -75,7 +85,13 @@ async def get_rds_price(
     Pricing API を用いて、RDS の指定インスタンスクラスのオンデマンド料金（USD/時）を取得する。
     ※ ここでは Single-AZ、Linux/UNIX の場合を想定。
     """
-    async with aioboto3.client("pricing", region_name="us-east-1") as pricing:
+    # キャッシュをチェック
+    cache_key = f"{instance_class}:{location}:{engine}"
+    if cache_key in rds_price_cache:
+        return rds_price_cache[cache_key]
+
+    session = aioboto3.Session()
+    async with session.client("pricing", region_name="us-east-1") as pricing:
         try:
             response = await pricing.get_products(
                 ServiceCode="AmazonRDS",
@@ -101,19 +117,25 @@ async def get_rds_price(
                 on_demand = next(iter(price_item["terms"]["OnDemand"].values()))
                 price_dimensions = next(iter(on_demand["priceDimensions"].values()))
                 price_per_hour = float(price_dimensions["pricePerUnit"]["USD"])
+                # キャッシュに保存
+                rds_price_cache[cache_key] = price_per_hour
                 return price_per_hour
         except Exception as e:
             print(f"RDS 料金取得エラー: {e}")
         return 0.0
 
 
-@lru_cache(maxsize=100)
 async def get_alb_price(location: str) -> float:
     """
     Pricing API を用いて、ALB（Application Load Balancer）の基本料金（USD/時）を取得する。
     ※ ALB の料金は従量課金（LCU やリクエスト数など）もあるため、ここではベース料金のみを概算。
     """
-    async with aioboto3.client("pricing", region_name="us-east-1") as pricing:
+    # キャッシュをチェック
+    if location in alb_price_cache:
+        return alb_price_cache[location]
+
+    session = aioboto3.Session()
+    async with session.client("pricing", region_name="us-east-1") as pricing:
         try:
             response = await pricing.get_products(
                 ServiceCode="AWSELB",
@@ -133,6 +155,8 @@ async def get_alb_price(location: str) -> float:
                 on_demand = next(iter(price_item["terms"]["OnDemand"].values()))
                 price_dimensions = next(iter(on_demand["priceDimensions"].values()))
                 price_per_hour = float(price_dimensions["pricePerUnit"]["USD"])
+                # キャッシュに保存
+                alb_price_cache[location] = price_per_hour
                 return price_per_hour
         except Exception as e:
             print(f"ALB 料金取得エラー: {e}")
@@ -152,17 +176,17 @@ async def estimate_realtime_cost_by_arn() -> List[Dict]:
     start_of_day = datetime(now.year, now.month, now.day)
     elapsed_hours = (now - start_of_day).total_seconds() / 3600
 
-    async with aioboto3.Session().client("sts") as sts:
+    session = aioboto3.Session()
+    async with session.client("sts") as sts:
         account_id = (await sts.get_caller_identity())["Account"]
         current_region = sts.meta.region_name or "us-east-1"
         location = REGION_TO_LOCATION.get(current_region, current_region)
 
     async def process_ec2():
-        async with aioboto3.client("ec2", region_name=current_region) as ec2:
+        async with session.client("ec2", region_name=current_region) as ec2:
             ec2_resp = await ec2.describe_instances(
                 Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
             )
-            tasks = []
             for reservation in ec2_resp.get("Reservations", []):
                 for instance in reservation.get("Instances", []):
                     instance_id = instance.get("InstanceId")
@@ -181,9 +205,8 @@ async def estimate_realtime_cost_by_arn() -> List[Dict]:
                     )
 
     async def process_rds():
-        async with aioboto3.client("rds", region_name=current_region) as rds:
+        async with session.client("rds", region_name=current_region) as rds:
             rds_resp = await rds.describe_db_instances()
-            tasks = []
             for db_instance in rds_resp.get("DBInstances", []):
                 if db_instance.get("DBInstanceStatus") == "available":
                     instance_class = db_instance.get("DBInstanceClass")
@@ -204,7 +227,7 @@ async def estimate_realtime_cost_by_arn() -> List[Dict]:
                     )
 
     async def process_alb():
-        async with aioboto3.client("elbv2", region_name=current_region) as elbv2:
+        async with session.client("elbv2", region_name=current_region) as elbv2:
             elb_resp = await elbv2.describe_load_balancers()
             alb_price = await get_alb_price(location)
             for lb in elb_resp.get("LoadBalancers", []):
@@ -227,7 +250,9 @@ async def estimate_realtime_cost_by_arn() -> List[Dict]:
 
 
 if __name__ == "__main__":
-    cost_by_arn = estimate_realtime_cost_by_arn()
+    import asyncio
+
+    cost_by_arn = asyncio.run(estimate_realtime_cost_by_arn())
     print("各リソースARNごとの概算リアルタイムコスト:")
     for item in cost_by_arn:
         print(item)

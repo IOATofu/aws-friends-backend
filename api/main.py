@@ -36,7 +36,11 @@ async def talk(arn: str = Form(), log: list = Form()):
 
 @app.get("/instances")
 async def get_instances():
-    return getInfo()
+    """
+    EC2、RDS、ALBインスタンスの情報を取得します。
+    非同期処理で高速化されています。
+    """
+    return await getInfo()
 
 
 @app.get("/alb")

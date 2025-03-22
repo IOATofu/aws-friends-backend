@@ -1,24 +1,45 @@
 import boto3
+import asyncio
 from .ec2 import get_latest_ec2_metrics
 from .rds import get_latest_rds_metrics
 from .alb import get_latest_alb_metrics
-from .calc_state import calc_ec2, calc_rds,calc_alb
+from .calc_state import calc_ec2, calc_rds, calc_alb
 
 
-def getInfo():
+async def get_all_metrics_async():
+    """
+    EC2、RDS、ALBのメトリクスを非同期で並列取得します。
+    """
+    # 非同期タスクを作成
+    tasks = [
+        asyncio.to_thread(get_latest_ec2_metrics),
+        asyncio.to_thread(get_latest_rds_metrics),
+        asyncio.to_thread(get_latest_alb_metrics),
+    ]
+
+    # 並列実行して結果を取得
+    ec2_metrics, rds_metrics, alb_metrics = await asyncio.gather(*tasks)
+
+    return ec2_metrics, rds_metrics, alb_metrics
+
+
+async def getInfo():
     metrics_data = []
     # セッションからリージョンを取得
     session = boto3.Session()
     region = session.region_name
 
     # STS クライアントを作成してアカウントIDを取得
-    sts_client = boto3.client('sts')
+    sts_client = boto3.client("sts")
     response = sts_client.get_caller_identity()
-    account_id = response['Account']
+    account_id = response["Account"]
 
-    ec2_metrics = get_latest_ec2_metrics()
+    # 非同期で全メトリクスを一気に取得（asyncio.runは使わない）
+    ec2_metrics, rds_metrics, alb_metrics = await get_all_metrics_async()
+
+    # EC2メトリクスの処理
     for metric in ec2_metrics:
-        instance_id = metric['instance_id']
+        instance_id = metric["instance_id"]
         metrics_data.append(
             {
                 "type": "ec2",
@@ -27,9 +48,9 @@ def getInfo():
             }
         )
 
-    rds_metrics = get_latest_rds_metrics()
+    # RDSメトリクスの処理
     for metric in rds_metrics:
-        db_name = metric['db_instance_identifier']
+        db_name = metric["db_instance_identifier"]
         metrics_data.append(
             {
                 "type": "rds",
@@ -38,7 +59,7 @@ def getInfo():
             }
         )
 
-    alb_metrics = get_latest_alb_metrics()
+    # ALBメトリクスの処理
     for metric in alb_metrics:
         metrics_data.append(
             {
@@ -48,6 +69,7 @@ def getInfo():
             }
         )
     return metrics_data
+
 
 if __name__ == "__main__":
     print(getInfo())
