@@ -1,7 +1,7 @@
 import boto3
 from instance.ec2 import get_latest_ec2_metrics
 from instance.rds import get_latest_rds_metrics
-from instance.alb import get_latest_alb_metrics
+from instance.alb import get_alb_list
 
 
 def getInfo():
@@ -37,15 +37,13 @@ def getInfo():
             }
         )
 
-    alb_metrics = get_latest_alb_metrics()
-    for metric in alb_metrics:
-        alb_name = metric['load_balancer_name']
-        alb_ID = 12
+    alb_list = get_alb_list()
+    for alb in alb_list:
         metrics_data.append(
             {
                 "type": "alb",
                 "name": "tmp",
-                "arn": f"arn:aws:elasticloadbalancin:{region}:{account_id}:loadbalancer/app/{alb_name}/{alb_ID}",
+                "arn": alb["arn"],
             }
         )
     return metrics_data
