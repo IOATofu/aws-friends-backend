@@ -116,7 +116,6 @@ def get_latest_alb_metrics(
 
             # メトリクスデータを処理
             datapoints = metrics["Datapoints"]
-            print(datapoints)
             if datapoints:
                 # タイムスタンプでソートして最新のものを取得
                 datapoints.sort(key=lambda x: x["Timestamp"])
