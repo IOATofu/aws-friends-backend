@@ -29,7 +29,6 @@ def get_metrics_by_arn(arn: str):
         raise Exception(f"get_metrics_by_arn: サポートされていないARNです: {arn}")
 
 
-
 # ロガーの設定
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -62,7 +61,7 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
                 )
             else:
                 # その他のGETエンドポイントは60秒間キャッシュ
-                response.headers["Cache-Control"] = "public, max-age=60"
+                response.headers["Cache-Control"] = "public, max-age=20"
         else:
             # POSTなどの変更を伴うリクエストはキャッシュしない
             response.headers["Cache-Control"] = (

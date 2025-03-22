@@ -64,14 +64,16 @@ def calc_alb(request_count, status=None):
     戻り値:
         "low", "medium", "high", "unknown"のいずれか
     """
+
+    print("request_count", request_count)
     # レスポンス時間がない場合
     if request_count is None:
         return "unknown"
 
     # レスポンス時間に基づく状態判定
-    if request_count < 30:
+    if request_count < 100:
         return "low"  # 0.5秒未満: 低負荷
-    elif request_count < 60:
+    elif request_count < 250:
         return "medium"  # 0.5秒以上2秒未満: 中負荷
     else:
         return "high"  # 2秒以上: 高負荷
