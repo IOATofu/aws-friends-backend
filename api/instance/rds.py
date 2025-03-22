@@ -1,7 +1,7 @@
 import boto3
 import datetime
 from typing import Dict, List, Optional, Union
-from utils import format_bytes
+from instance.utils import format_bytes
 
 def get_latest_rds_metrics(
     minutes_range: int = 30, delay_minutes: int = 2

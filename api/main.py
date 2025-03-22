@@ -18,12 +18,18 @@ async def get_instances():
 
 @app.post("/instances/profile")
 async def instance_profile(text: str = Form()):
-    return {"message": "instances"}
+    return {"name": "Sample Instance Name"}
 
 @app.get("/load-state")
 async def get_loadstate():
-    return {"message": "load-state"}
+    return {
+        "arn": "(arn)",
+        "level": "low",
+    }
 
 @app.put("/load-state")
 async def put_loadstate(text: str = Form()):
     return {"message": "load-state"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8080, log_level="debug")
