@@ -1,5 +1,7 @@
 # Progate Hackathon Backend
 
+![ロゴ](./img/AWS.png)
+
 ## uvの使い方
 1. 環境の作成
 `.venv`以下に作成されます
