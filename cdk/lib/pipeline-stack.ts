@@ -95,7 +95,23 @@ export class PipelineStack extends cdk.Stack {
 
     // デプロイ用のビルドプロジェクト
     const deployProject = new codebuild.PipelineProject(this, 'DeployProject', {
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspec-deploy.yml'),
+      buildSpec: codebuild.BuildSpec.fromObject({
+        version: '0.2',
+        phases: {
+          build: {
+            commands: [
+              'echo Creating image definitions file...',
+              'echo "[{\\"name\\":\\"ApiContainer\\",\\"imageUri\\":\\"${ECR_REPOSITORY_URI}:latest\\"}]" > imageDefinitions.json',
+              'cat imageDefinitions.json'
+            ]
+          }
+        },
+        artifacts: {
+          files: [
+            'imageDefinitions.json'
+          ]
+        }
+      }),
       environmentVariables: {
         'ECR_REPOSITORY_URI': {
           value: props.ecrRepository.repositoryUri
