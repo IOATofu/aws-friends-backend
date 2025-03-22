@@ -175,11 +175,11 @@ def get_response_from_json(conversation_json, model_id="anthropic.claude-3-5-hai
 
 
 def character_chat(arn,conversation_json,metrics, model_id="anthropic.claude-3-5-sonnet-20241022-v2:0", debug=False):
-    if "alb" in arn:    
+    if "elasticloadbalancing" in arn:    
         prompt = base_head_prompt + alb_prompt + base_foot_prompt
     elif "ec2" in arn:
         prompt = base_head_prompt + ec2_prompt + base_foot_prompt
-    elif "rdb" in arn:
+    elif "rds" in arn:
         prompt = base_head_prompt + rdb_prompt + base_foot_prompt
     else:
         raise Exception(f"サポートされていないARNです: {arn}")
