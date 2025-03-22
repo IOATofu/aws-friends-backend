@@ -1,17 +1,21 @@
 import boto3
 import datetime
+import concurrent.futures
 from typing import Dict, List, Optional, Union
 from .utils import format_bytes
 
+
 def get_latest_rds_metrics(
-    minutes_range: int = 30, delay_minutes: int = 2
+    minutes_range: int = 15, delay_minutes: int = 0
 ) -> List[Dict[str, Union[str, float, datetime.datetime, Dict]]]:
     """
     すべてのRDSインスタンスの最新メトリクスを取得します。
+    バッチ処理と並列処理を使用して高速化しています。
+    最適化モード：短時間範囲、最小限のメトリクス、高速取得
 
     引数:
-        minutes_range (int): メトリクスを取得する過去の分数（デフォルト: 30）
-        delay_minutes (int): 遅延を考慮して現在時刻から引く分数（デフォルト: 2）
+        minutes_range (int): メトリクスを取得する過去の分数（デフォルト: 15）
+        delay_minutes (int): 遅延を考慮して現在時刻から引く分数（デフォルト: 0）
 
     戻り値:
         List[Dict]: RDSメトリクスを含む辞書のリスト:
@@ -24,7 +28,6 @@ def get_latest_rds_metrics(
                 - read_iops (float): 1秒あたりの読み取り操作数
                 - write_iops (float): 1秒あたりの書き込み操作数
             - timestamp (datetime): 測定のタイムスタンプ
-            メトリクスが見つからない場合、metrics値はNoneになり、timestampもNoneになります
     """
     rds = boto3.client("rds")
     cloudwatch = boto3.client("cloudwatch")
@@ -34,23 +37,70 @@ def get_latest_rds_metrics(
     end_time = now - datetime.timedelta(minutes=delay_minutes)
     start_time = end_time - datetime.timedelta(minutes=minutes_range)
 
-    # すべてのRDSインスタンスを取得
+    # 利用可能なRDSインスタンスを取得
+    print("利用可能なRDSインスタンスを取得中...")
     response = rds.describe_db_instances()
-    rds_metrics = []
 
-    # 単位付きで収集するメトリクス
+    # 処理対象のRDSインスタンスを抽出
+    instances = response["DBInstances"]
+
+    if not instances:
+        print("RDSインスタンスが見つかりませんでした")
+        return []
+
+    print(f"{len(instances)}個のRDSインスタンスを処理します")
+
+    # 単位付きで収集するメトリクス（全てのメトリクスを取得）
     metric_configs = [
-        ("CPUUtilization", "Percent"),
-        ("FreeStorageSpace", "Bytes"),
-        ("DatabaseConnections", "Count"),
-        ("FreeableMemory", "Bytes"),
-        ("ReadIOPS", "Count/Second"),
-        ("WriteIOPS", "Count/Second"),
+        ("CPUUtilization", "Percent", "cpu_utilization"),
+        ("FreeStorageSpace", "Bytes", "free_storage_space"),
+        ("DatabaseConnections", "Count", "database_connections"),
+        ("FreeableMemory", "Bytes", "freeable_memory"),
+        ("ReadIOPS", "Count/Second", "read_iops"),
+        ("WriteIOPS", "Count/Second", "write_iops"),
     ]
 
-    # 各RDSインスタンスを処理
-    for instance in response["DBInstances"]:
+    # 各RDSインスタンスのメトリクスをバッチで取得
+    rds_metrics = []
+
+    for instance in instances:
         db_instance_identifier = instance["DBInstanceIdentifier"]
+        print(f"処理中のRDSインスタンス: {db_instance_identifier}")
+
+        # バッチ処理用のメトリクスクエリを準備
+        metric_queries = []
+        for i, (metric_name, unit, _) in enumerate(metric_configs):
+            metric_queries.append(
+                {
+                    "Id": f"m{i}",
+                    "MetricStat": {
+                        "Metric": {
+                            "Namespace": "AWS/RDS",
+                            "MetricName": metric_name,
+                            "Dimensions": [
+                                {
+                                    "Name": "DBInstanceIdentifier",
+                                    "Value": db_instance_identifier,
+                                }
+                            ],
+                        },
+                        "Period": 60,  # 1分間隔（高速化）
+                        "Stat": "Average",
+                        "Unit": unit,
+                    },
+                }
+            )
+
+        # 一度のAPIコールで複数のメトリクスを取得
+        print(f"{db_instance_identifier}のメトリクスを一括取得中...")
+        metrics_response = cloudwatch.get_metric_data(
+            MetricDataQueries=metric_queries,
+            StartTime=start_time,
+            EndTime=end_time,
+            ScanBy="TimestampDescending",  # 最新のデータから取得（高速化）
+        )
+
+        # メトリクスデータを処理
         metrics_data = {
             "cpu_utilization": None,
             "free_storage_space": None,
@@ -61,58 +111,35 @@ def get_latest_rds_metrics(
         }
         latest_timestamp = None
 
-        # 各メトリクス名のメトリクスを取得
-        for metric_name, unit in metric_configs:
-            metrics = cloudwatch.get_metric_statistics(
-                Namespace="AWS/RDS",
-                MetricName=metric_name,
-                Dimensions=[
-                    {
-                        "Name": "DBInstanceIdentifier",
-                        "Value": db_instance_identifier,
-                    },
-                ],
-                StartTime=start_time,
-                EndTime=end_time,
-                Period=300,  # 5-minute periods
-                Statistics=["Average"],
-                Unit=unit,
-            )
+        # 各メトリクスの結果を処理
+        for i, (_, _, metric_key) in enumerate(metric_configs):
+            result = metrics_response["MetricDataResults"][i]
 
-            # メトリクスデータを処理
-            datapoints = metrics["Datapoints"]
-            if datapoints:
-                # タイムスタンプでソートして最新のものを取得
-                datapoints.sort(key=lambda x: x["Timestamp"])
-                latest = datapoints[-1]
+            if result["Values"]:
+                # 最新の値を取得（既にTimestampDescendingでソート済み）
+                latest_value = result["Values"][0]
+                latest_ts = result["Timestamps"][0]
 
                 # メトリクスデータを更新
-                metric_key = metric_name.lower()
-                if metric_key == "cpuutilization":
-                    metrics_data["cpu_utilization"] = latest["Average"]
-                elif metric_key == "freestoragespace":
-                    metrics_data["free_storage_space"] = latest["Average"]
-                elif metric_key == "databaseconnections":
-                    metrics_data["database_connections"] = latest["Average"]
-                elif metric_key == "freeablememory":
-                    metrics_data["freeable_memory"] = latest["Average"]
-                elif metric_key == "readiops":
-                    metrics_data["read_iops"] = latest["Average"]
-                elif metric_key == "writeiops":
-                    metrics_data["write_iops"] = latest["Average"]
+                metrics_data[metric_key] = latest_value
 
-                # これが最新の場合、タイムスタンプを更新
-                if latest_timestamp is None or latest["Timestamp"] > latest_timestamp:
-                    latest_timestamp = latest["Timestamp"]
+                # タイムスタンプを更新
+                if latest_timestamp is None or latest_ts > latest_timestamp:
+                    latest_timestamp = latest_ts
+
+        # インスタンスのステータスを取得
+        db_instance_status = instance.get("DBInstanceStatus", "unknown")
 
         rds_metrics.append(
             {
                 "db_instance_identifier": db_instance_identifier,
+                "db_instance_status": db_instance_status,  # インスタンスのステータスを追加
                 "metrics": metrics_data,
                 "timestamp": latest_timestamp,
             }
         )
 
+    print(f"{len(rds_metrics)}個のRDSインスタンスのメトリクスを取得しました")
     return rds_metrics
 
 

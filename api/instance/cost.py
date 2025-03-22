@@ -1,7 +1,7 @@
 import aioboto3
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 # リージョンコードから Pricing API 用の location 名のマッピング例
@@ -166,15 +166,17 @@ async def get_alb_price(location: str) -> float:
 async def estimate_realtime_cost_by_arn() -> List[Dict]:
     """
     現在稼働中の EC2、RDS、ALB の各リソースごとに、ARN をキーとして
-    今日の午前0時から現在までの経過時間に応じた概算コスト（USD）を算出します。
+    インスタンスの稼働時間に応じた概算コスト（USD）を算出します。
+
+    EC2: 起動時間から現在までの経過時間
+    RDS: インスタンス作成時間から現在までの経過時間
+    ALB: ロードバランサー作成時間から現在までの経過時間
 
     Returns:
         List[Dict]: 各リソースごとの情報と概算コストのリスト
     """
     results = []
-    now = datetime.now()
-    start_of_day = datetime(now.year, now.month, now.day)
-    elapsed_hours = (now - start_of_day).total_seconds() / 3600
+    now = datetime.now(timezone.utc)  # UTCで現在時刻を取得
 
     session = aioboto3.Session()
     async with session.client("sts") as sts:
@@ -184,15 +186,24 @@ async def estimate_realtime_cost_by_arn() -> List[Dict]:
 
     async def process_ec2():
         async with session.client("ec2", region_name=current_region) as ec2:
-            ec2_resp = await ec2.describe_instances(
-                Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
-            )
+            # 全てのEC2インスタンスを取得（フィルタリングなし）
+            ec2_resp = await ec2.describe_instances()
             for reservation in ec2_resp.get("Reservations", []):
                 for instance in reservation.get("Instances", []):
                     instance_id = instance.get("InstanceId")
                     instance_type = instance.get("InstanceType")
+
+                    # インスタンスの起動時間を取得
+                    launch_time = instance.get("LaunchTime")
+                    if launch_time:
+                        # 起動時間から現在までの経過時間（時間単位）を計算
+                        instance_hours = (now - launch_time).total_seconds() / 3600
+                    else:
+                        # 起動時間が取得できない場合は24時間とする
+                        instance_hours = 24.0
+
                     hourly_rate = await get_ec2_price(instance_type, location)
-                    cost = hourly_rate * elapsed_hours
+                    cost = hourly_rate * instance_hours
                     instance_arn = f"arn:aws:ec2:{current_region}:{account_id}:instance/{instance_id}"
                     results.append(
                         {
@@ -200,7 +211,7 @@ async def estimate_realtime_cost_by_arn() -> List[Dict]:
                             "service_type": "ec2",
                             "instance_type": instance_type,
                             "cost": round(cost, 4),
-                            "hours_elapsed": round(elapsed_hours, 2),
+                            "hours_elapsed": round(instance_hours, 2),
                         }
                     )
 
@@ -214,15 +225,27 @@ async def estimate_realtime_cost_by_arn() -> List[Dict]:
                     if not instance_arn:
                         db_instance_identifier = db_instance.get("DBInstanceIdentifier")
                         instance_arn = f"arn:aws:rds:{current_region}:{account_id}:db:{db_instance_identifier}"
+
+                    # インスタンスの作成時間を取得
+                    instance_create_time = db_instance.get("InstanceCreateTime")
+                    if instance_create_time:
+                        # 作成時間から現在までの経過時間（時間単位）を計算
+                        instance_hours = (
+                            now - instance_create_time
+                        ).total_seconds() / 3600
+                    else:
+                        # 作成時間が取得できない場合は24時間とする
+                        instance_hours = 24.0
+
                     hourly_rate = await get_rds_price(instance_class, location)
-                    cost = hourly_rate * elapsed_hours
+                    cost = hourly_rate * instance_hours
                     results.append(
                         {
                             "instance_arn": instance_arn,
                             "service_type": "rds",
                             "instance_type": instance_class,
                             "cost": round(cost, 4),
-                            "hours_elapsed": round(elapsed_hours, 2),
+                            "hours_elapsed": round(instance_hours, 2),
                         }
                     )
 
@@ -232,14 +255,24 @@ async def estimate_realtime_cost_by_arn() -> List[Dict]:
             alb_price = await get_alb_price(location)
             for lb in elb_resp.get("LoadBalancers", []):
                 lb_arn = lb.get("LoadBalancerArn")
-                cost = alb_price * elapsed_hours
+
+                # ロードバランサーの作成時間を取得
+                created_time = lb.get("CreatedTime")
+                if created_time:
+                    # 作成時間から現在までの経過時間（時間単位）を計算
+                    lb_hours = (now - created_time).total_seconds() / 3600
+                else:
+                    # 作成時間が取得できない場合は24時間とする
+                    lb_hours = 24.0
+
+                cost = alb_price * lb_hours
                 results.append(
                     {
                         "instance_arn": lb_arn,
                         "service_type": "alb",
                         "instance_type": "N/A",
                         "cost": round(cost, 4),
-                        "hours_elapsed": round(elapsed_hours, 2),
+                        "hours_elapsed": round(lb_hours, 2),
                     }
                 )
 

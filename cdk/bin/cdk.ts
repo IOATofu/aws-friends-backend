@@ -27,7 +27,8 @@ const apiStack = new ApiStack(app, 'ProgateHackathonApiStack', {
   ...commonProps,
   ecrRepository: devopsStack.ecrRepository,
   domainName: 'aws-friends.k1h.dev',
-  certificateArn: 'arn:aws:acm:us-west-2:520070710501:certificate/55ce4986-b2e0-4780-8862-c34d1a85beb8',
+  // Cloudfrontで利用する証明書はus-east-1に作成
+  certificateArn: 'arn:aws:acm:us-east-1:520070710501:certificate/7e655e9a-5962-4f69-9e89-b997b3b29e61',
 });
 
 // パイプラインスタック（CI/CDパイプラインの作成）

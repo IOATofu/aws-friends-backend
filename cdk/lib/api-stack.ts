@@ -5,6 +5,9 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 interface ApiStackProps extends cdk.StackProps {
@@ -62,7 +65,6 @@ export class ApiStack extends cdk.Stack {
         resources: ['*'],
       })
     );
-
     // Cost Explorer APIとPricing APIの権限を追加
     taskRole.addToPolicy(
       new iam.PolicyStatement({
@@ -72,6 +74,20 @@ export class ApiStack extends cdk.Stack {
           'ce:GetTags',
           'pricing:GetProducts',
           'sts:GetCallerIdentity'
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // Amazon Bedrockの権限を追加
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'bedrock:InvokeModel',
+          'bedrock:InvokeModelWithResponseStream',
+          'bedrock:ListFoundationModels',
+          'bedrock:GetFoundationModel'
         ],
         resources: ['*'],
       })
@@ -117,15 +133,24 @@ export class ApiStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
+    // CloudFrontのIPレンジからのトラフィックを許可
+    // 注: CloudFrontの実際のIPプールを使用すると良いですが、管理簡略化のため全IPv4を許可
     albSg.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
-      'Allow HTTP traffic'
+      'Allow HTTP traffic from CloudFront'
     );
     albSg.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(443),
-      'Allow HTTPS traffic'
+      'Allow HTTPS traffic from CloudFront'
+    );
+
+    // 継続的にヘルスチェックを行うため、VPC内部からのアクセスも許可
+    albSg.addIngressRule(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Port.allTraffic(),
+      'Allow all traffic from within VPC'
     );
 
     const serviceSg = new ec2.SecurityGroup(this, 'ServiceSecurityGroup', {
@@ -143,31 +168,15 @@ export class ApiStack extends cdk.Stack {
     alb.addSecurityGroup(albSg);
     this.service.connections.addSecurityGroup(serviceSg);
 
-    // HTTPリスナーの作成
+    // HTTPリスナーの作成（CloudFrontからの接続用）
     const httpListener = alb.addListener('HttpListener', {
       port: 80,
-      defaultAction: elbv2.ListenerAction.redirect({
-        protocol: 'HTTPS',
-        port: '443',
-        permanent: true,
-      }),
-    });
-
-    // HTTPSリスナーの作成
-    const httpsListener = alb.addListener('HttpsListener', {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [
-        certificatemanager.Certificate.fromCertificateArn(
-          this,
-          'Certificate',
-          props.certificateArn as string
-        ),
-      ],
+      // CloudFrontからのリクエストを直接ターゲットグループに転送
+      // HTTPSリダイレクトは不要（CloudFrontがHTTPSを処理するため）
     });
 
     // メインのターゲットグループを作成
-    const targetGroup = httpsListener.addTargets('ApiTarget', {
+    const targetGroup = httpListener.addTargets('ApiTarget', {
       port: 8080,
       targets: [this.service],
       healthCheck: {
@@ -180,7 +189,7 @@ export class ApiStack extends cdk.Stack {
     });
 
     // OPTIONSリクエスト用のリスナールールを追加
-    httpsListener.addAction('OptionsRule', {
+    httpListener.addAction('OptionsRule', {
       priority: 1,
       conditions: [
         elbv2.ListenerCondition.httpHeader('Access-Control-Request-Method', ['*']),
@@ -191,11 +200,150 @@ export class ApiStack extends cdk.Stack {
       }),
     });
 
+    // CloudFrontからのリクエストを識別するためのリスナールールを追加
+    httpListener.addAction('CloudFrontRule', {
+      priority: 2,
+      conditions: [
+        elbv2.ListenerCondition.httpHeader('X-Origin-From-CloudFront', ['true']),
+      ],
+      action: elbv2.ListenerAction.forward([targetGroup]),
+    });
+
+    // CloudFrontのアクセスログ用のS3バケットを作成
+    const accessLogBucket = new s3.Bucket(this, 'CloudFrontAccessLogsBucket', {
+      removalPolicy: cdk.RemovalPolicy.RETAIN, // ログバケットは削除しない
+      encryption: s3.BucketEncryption.S3_MANAGED, // SSE-S3暗号化を有効化
+      enforceSSL: true, // HTTPSのみアクセスを許可
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // パブリックアクセスをブロック
+      objectOwnership: s3.ObjectOwnership.OBJECT_WRITER, // ACLを有効化（CloudFrontがログを書き込めるようにするため）
+      lifecycleRules: [
+        {
+          // 1年経過したログファイルを削除
+          expiration: cdk.Duration.days(365),
+          // 90日経過したログファイルをGlacierに移動
+          transitions: [
+            {
+              storageClass: s3.StorageClass.GLACIER,
+              transitionAfter: cdk.Duration.days(90),
+            },
+          ],
+        },
+      ],
+    });
+
+    // CloudFrontのログ記録用の権限を付与
+    const cloudfrontLogDeliveryServicePrincipal = new iam.ServicePrincipal('delivery.logs.amazonaws.com');
+    accessLogBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [cloudfrontLogDeliveryServicePrincipal],
+        actions: ['s3:GetBucketAcl', 's3:PutBucketAcl'],
+        resources: [accessLogBucket.bucketArn],
+      })
+    );
+
+    // CloudFrontディストリビューションの作成
+    // キャッシュポリシーの設定（TTLを60秒に設定）
+    const cachePolicy = new cloudfront.CachePolicy(this, 'ApiCachePolicy', {
+      cachePolicyName: 'ApiCachePolicy',
+      comment: 'Cache policy for API with 60 seconds TTL',
+      defaultTtl: cdk.Duration.seconds(60),
+      minTtl: cdk.Duration.seconds(1),
+      maxTtl: cdk.Duration.seconds(120),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+      headerBehavior: cloudfront.CacheHeaderBehavior.allowList(
+        'Authorization',
+        'Origin',
+        'Access-Control-Request-Method',
+        'Access-Control-Request-Headers'
+      ),
+      cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
+    });
+
+    // CloudFrontのオリジンとして設定
+    const albOrigin = new origins.LoadBalancerV2Origin(alb, {
+      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY, // ALBはHTTPリスナーを使用
+      customHeaders: {
+        // CloudFrontからのリクエストであることを示すカスタムヘッダー
+        'X-Origin-From-CloudFront': 'true',
+      },
+      connectionAttempts: 3, // 接続試行回数
+      connectionTimeout: cdk.Duration.seconds(10), // 接続タイムアウト
+    });
+
+    // 正常系レスポンスをキャッシュするためのオリジンリクエストポリシー
+    const apiOriginRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'ApiOriginRequestPolicy', {
+      originRequestPolicyName: 'ApiOriginRequestPolicy',
+      comment: 'API origin request policy with headers needed for ALB',
+      cookieBehavior: cloudfront.OriginRequestCookieBehavior.all(),
+      headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
+        'Host',
+        // 'X-Origin-From-CloudFront' は削除 - オリジンカスタムヘッダーと競合するため
+        'Origin',
+        'Referer',
+        'User-Agent'
+        // 注: 'Authorization'ヘッダーはCachePolicyで処理する必要がある
+      ),
+      queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
+    });
+
+    // ALBをオリジンとするCloudFrontディストリビューションを作成
+    const distribution = new cloudfront.Distribution(this, 'ApiDistribution', {
+      defaultBehavior: {
+        origin: albOrigin,
+        cachePolicy: cachePolicy,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        originRequestPolicy: apiOriginRequestPolicy,
+      },
+      // 代替ドメイン名と証明書を追加（両方が指定されている場合のみ）
+      // 注: CloudFrontの証明書はus-east-1リージョンに存在する必要があります
+      ...(props.domainName && props.certificateArn ? {
+        domainNames: [props.domainName],
+        certificate: certificatemanager.Certificate.fromCertificateArn(
+          this,
+          'Certificate',
+          props.certificateArn
+        )
+      } : {}),
+      // ログ記録を有効化
+      logBucket: accessLogBucket,
+      logFilePrefix: 'cloudfront-logs/', // S3内のログファイルのプレフィックス
+      logIncludesCookies: true, // クッキー情報も記録
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // 北米・欧州・アジアの一部のみ（コスト削減）
+      enabled: true,
+      comment: 'CloudFront distribution for API with access logging enabled',
+      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021, // 最新のTLSプロトコルを使用
+    });
+
+    // ALBをどこからでもアクセスできるように許可（テスト環境のみ）
+    // 本番環境では実際のCloudFrontのIPレンジのみを許可するべき
+    albSg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.allTcp(),
+      'Allow all TCP traffic from anywhere for testing'
+    );
+
+    // アクセスログバケットの出力を追加
+    new cdk.CfnOutput(this, 'CloudFrontAccessLogsBucketName', {
+      value: accessLogBucket.bucketName,
+      description: 'CloudFront access logs bucket name',
+      exportName: 'CloudFrontAccessLogsBucketName',
+    });
+
     // 出力の追加
     new cdk.CfnOutput(this, 'AlbEndpoint', {
       value: alb.loadBalancerDnsName,
       description: 'Application Load Balancer endpoint',
       exportName: 'AlbEndpoint',
+    });
+
+    new cdk.CfnOutput(this, 'CloudFrontEndpoint', {
+      value: distribution.distributionDomainName,
+      description: 'CloudFront distribution endpoint',
+      exportName: 'CloudFrontEndpoint',
     });
 
     if (props.domainName) {
