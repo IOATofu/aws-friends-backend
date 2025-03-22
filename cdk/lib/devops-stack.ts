@@ -4,11 +4,13 @@ import { Construct } from 'constructs';
 import { RemovalPolicy } from 'aws-cdk-lib';
 
 export class DevopsStack extends cdk.Stack {
+  public readonly ecrRepository: ecr.Repository;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // Create ECR Repository
-    const repository = new ecr.Repository(this, 'ApiRepository', {
+    this.ecrRepository = new ecr.Repository(this, 'ApiRepository', {
       repositoryName: 'progate-hackathon-api',
       removalPolicy: RemovalPolicy.DESTROY, // 開発/テスト環境ではDESTROY、本番環境ではRETAINを使用
       imageScanOnPush: true, // 脆弱性スキャンを有効化
@@ -23,11 +25,11 @@ export class DevopsStack extends cdk.Stack {
 
     // Output ECR Repository URL
     new cdk.CfnOutput(this, 'ApiRepositoryUrl', {
-      value: repository.repositoryUri,
+      value: this.ecrRepository.repositoryUri,
     });
     // Output ECR Repository Name
     new cdk.CfnOutput(this, 'ApiRepositoryName', {
-      value: repository.repositoryName,
+      value: this.ecrRepository.repositoryName,
     });
   }
 }

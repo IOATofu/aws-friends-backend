@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { DevopsStack } from '../lib/devops-stack';
+import { ApiStack } from '../lib/api-stack';
 
 const app = new cdk.App();
-new DevopsStack(app, 'ProgateHackathonStack', {
+
+// DevOpsスタック
+const devopsStack = new DevopsStack(app, 'ProgateHackathonDevopsStack', {
   /* 環境を指定しない場合、このスタックは環境に依存しません。
    * アカウント/リージョンに依存する機能やコンテキストの参照は機能しませんが、
    * 生成されたテンプレートはどこにでもデプロイできます。 */
@@ -15,6 +18,20 @@ new DevopsStack(app, 'ProgateHackathonStack', {
   },
 
   // タグを追加（オプション）
+  tags: {
+    Environment: 'development',
+    Project: 'progate-hackathon',
+    ManagedBy: 'cdk'
+  }
+});
+
+// APIスタック
+new ApiStack(app, 'ProgateHackathonApiStack', {
+  ecrRepository: devopsStack.ecrRepository,
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION
+  },
   tags: {
     Environment: 'development',
     Project: 'progate-hackathon',
