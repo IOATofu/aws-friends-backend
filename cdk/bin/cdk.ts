@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { CdkStack } from '../lib/cdk-stack';
+import { DevopsStack } from '../lib/devops-stack';
 
 const app = new cdk.App();
-new CdkStack(app, 'ProgateHackathonStack', {
+new DevopsStack(app, 'ProgateHackathonStack', {
   /* 環境を指定しない場合、このスタックは環境に依存しません。
    * アカウント/リージョンに依存する機能やコンテキストの参照は機能しませんが、
    * 生成されたテンプレートはどこにでもデプロイできます。 */

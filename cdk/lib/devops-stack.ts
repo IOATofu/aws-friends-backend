@@ -3,7 +3,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import { Construct } from 'constructs';
 import { RemovalPolicy } from 'aws-cdk-lib';
 
-export class CdkStack extends cdk.Stack {
+export class DevopsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
