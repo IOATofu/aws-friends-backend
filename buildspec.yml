@@ -1,12 +1,6 @@
 version: 0.2
 
 phases:
-  install:
-    runtime-versions:
-      python: 3.11
-    commands:
-      - pip install -r api/requirements.txt
-
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...

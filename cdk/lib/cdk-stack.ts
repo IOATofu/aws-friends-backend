@@ -25,5 +25,9 @@ export class CdkStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ApiRepositoryUrl', {
       value: repository.repositoryUri,
     });
+    // Output ECR Repository Name
+    new cdk.CfnOutput(this, 'ApiRepositoryName', {
+      value: repository.repositoryName,
+    });
   }
 }
