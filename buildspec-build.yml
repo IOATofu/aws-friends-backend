@@ -22,6 +22,12 @@ phases:
       - docker push ${REPOSITORY_URI}:${IMAGE_TAG}
       - docker push ${REPOSITORY_URI}:latest
 
+artifacts:
+  base-directory: .
+  files:
+    - buildspec-deploy.yml
+
 cache:
   paths:
     - /root/.cache/pip/**/*
+    - /root/.docker/buildkit

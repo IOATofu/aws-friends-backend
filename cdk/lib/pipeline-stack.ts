@@ -51,6 +51,10 @@ export class PipelineStack extends cdk.Stack {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
         privileged: true,
       },
+      cache: codebuild.Cache.local(
+        codebuild.LocalCacheMode.DOCKER_LAYER,
+        codebuild.LocalCacheMode.CUSTOM
+      ),
       buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspec-build.yml'),
       environmentVariables: {
         'AWS_ACCOUNT_ID': {

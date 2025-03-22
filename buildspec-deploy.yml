@@ -8,5 +8,7 @@ phases:
       - cat imageDefinitions.json
 
 artifacts:
+  base-directory: .
   files:
     - imageDefinitions.json
+    - buildspec-deploy.yml
