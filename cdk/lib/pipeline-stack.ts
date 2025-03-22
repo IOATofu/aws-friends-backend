@@ -100,12 +100,6 @@ export class PipelineStack extends cdk.Stack {
     });
 
     const deployOutput = new codepipeline.Artifact();
-    const createImageDefAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'CreateImageDefinitions',
-      project: deployProject,
-      input: sourceOutput,
-      outputs: [deployOutput],
-    });
 
     // ECSデプロイアクション
     const deployAction = new codepipeline_actions.EcsDeployAction({
@@ -114,10 +108,27 @@ export class PipelineStack extends cdk.Stack {
       imageFile: deployOutput.atPath('imageDefinitions.json'),
     });
 
+    // デプロイパイプラインのECRソース
+    const ecrSourceOutput = new codepipeline.Artifact();
+    const ecrSourceAction = new codepipeline_actions.EcrSourceAction({
+      actionName: 'ECR',
+      repository: props.ecrRepository,
+      imageTag: 'latest',
+      output: ecrSourceOutput,
+    });
+
     // デプロイパイプラインにステージを追加
     deployPipeline.addStage({
       stageName: 'Source',
-      actions: [sourceAction],
+      actions: [ecrSourceAction],
+    });
+
+    // createImageDefActionのinputをECRソースに変更
+    const createImageDefAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'CreateImageDefinitions',
+      project: deployProject,
+      input: ecrSourceOutput,
+      outputs: [deployOutput],
     });
 
     deployPipeline.addStage({
