@@ -19,14 +19,15 @@ app = FastAPI()
 
 
 def get_metrics_by_arn(arn: str):
-    if "alb" in arn:
+    if "elasticloadbalancing" in arn:
         return get_latest_alb_metrics()
     elif "ec2" in arn:
         return get_latest_ec2_metrics()
-    elif "rdb" in arn:
+    elif "rds" in arn:
         return get_latest_rds_metrics()
     else:
         raise Exception(f"サポートされていないARNです: {arn}")
+
 
 
 # ロガーの設定
