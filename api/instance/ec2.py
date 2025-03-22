@@ -77,26 +77,37 @@ def get_latest_ec2_metrics(
     end_time = now - datetime.timedelta(minutes=delay_minutes)
     start_time = end_time - datetime.timedelta(minutes=minutes_range)
 
-    # 実行中のEC2インスタンスのみを取得（高速化）
-    print("実行中のEC2インスタンスを取得中...")
-    response = ec2.describe_instances(
-        Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
-    )
+    # 全てのEC2インスタンスを取得（フィルタリングなし）
+    print("全てのEC2インスタンスを取得中...")
+    response = ec2.describe_instances()
 
     # 処理対象のインスタンスを抽出
     instances = []
     for reservation in response["Reservations"]:
         for instance in reservation["Instances"]:
-            instance_name = next(
-                (d["Value"] for d in instance["Tags"] if d["Key"] == "Name"), None
+            # Name タグを取得
+            instance_name = "N/A"
+            if "Tags" in instance:
+                for tag in instance["Tags"]:
+                    if tag["Key"] == "Name":
+                        instance_name = tag["Value"]
+                        break
+
+            # インスタンス情報を追加
+            instances.append(
+                {
+                    "InstanceId": instance["InstanceId"],
+                    "Name": instance_name,
+                    "State": instance["State"]["Name"],
+                }
             )
-            instance_id = instance["InstanceId"]
 
     if not instances:
-        print("実行中のEC2インスタンスが見つかりませんでした")
+        print("EC2インスタンスが見つかりませんでした")
         return []
 
     print(f"{len(instances)}個のEC2インスタンスを処理します")
+    print(f"インスタンス一覧: {[i['InstanceId'] for i in instances]}")
 
     # 一度のAPIコールで全インスタンスのメトリクスを取得（超高速化）
     instance_ids = [instance["InstanceId"] for instance in instances]
@@ -142,6 +153,15 @@ def get_latest_ec2_metrics(
 
         # メトリクスデータを処理
         for j, instance_id in enumerate(batch_ids):
+            # 対応するインスタンス名を取得
+            instance_name = next(
+                (
+                    inst["Name"]
+                    for inst in instances
+                    if inst["InstanceId"] == instance_id
+                ),
+                "N/A",
+            )
             result = metrics_response["MetricDataResults"][j]
 
             if result["Values"]:
@@ -178,7 +198,9 @@ if __name__ == "__main__":
     for metric in metrics:
         if metric["cpu_utilization"] is not None:
             print(
-                f"{metric['instance_id']} - CPU: {metric['cpu_utilization']:.2f}% at {metric['timestamp']}"
+                f"{metric['instance_id']} ({metric['instance_name']}) - CPU: {metric['cpu_utilization']:.2f}% at {metric['timestamp']}"
             )
         else:
-            print(f"{metric['instance_id']} - CPUデータが見つかりません")
+            print(
+                f"{metric['instance_id']} ({metric['instance_name']}) - CPUデータが見つかりません"
+            )
