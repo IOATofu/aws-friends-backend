@@ -1,12 +1,22 @@
-
-from fastapi import FastAPI, File, UploadFile, Form, Query, Body
-from instance import get_alb_list, getInfo, get_instance_costs, get_latest_ec2_metrics, get_latest_rds_metrics, get_latest_alb_metrics
-from chat import get_response_from_json ,character_chat
+from fastapi import FastAPI, File, UploadFile, Form, Query, Body, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from instance import (
+    get_alb_list,
+    getInfo,
+    get_instance_costs,
+    get_latest_ec2_metrics,
+    get_latest_rds_metrics,
+    get_latest_alb_metrics,
+)
+from chat import get_response_from_json, character_chat
 import logging
 import asyncio
 import uvicorn
 import json
+
 app = FastAPI()
+
 
 def get_metrics_by_arn(arn: str):
     if "alb" in arn:
@@ -17,7 +27,6 @@ def get_metrics_by_arn(arn: str):
         return get_latest_rds_metrics()
     else:
         raise Exception(f"サポートされていないARNです: {arn}")
-
 
 
 # ロガーの設定
@@ -72,10 +81,10 @@ async def health_check():
 
 @app.post("/chat")
 async def chat(arn: str = Form()):
-    
+
     metrics = get_metrics_by_arn(arn)
-    
-    arn,message = character_chat(arn,[],metrics)
+
+    arn, message = character_chat(arn, [], metrics)
     # モックレスポンスを返す
     return {
         "arn": arn,
@@ -84,7 +93,6 @@ async def chat(arn: str = Form()):
             "message": message,
         },
     }
-    
 
 
 @app.post("/talk")
@@ -106,9 +114,8 @@ async def talk(data: dict = Body(...)):
         # エラーハンドリング
         return {
             "error": "An error occurred while processing the chat log.",
-            "details": str(e)+"\n"+str(log)
+            "details": str(e) + "\n" + str(log),
         }
-
 
 
 @app.get("/instances")
