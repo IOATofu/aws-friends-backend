@@ -63,13 +63,15 @@ export class ApiStack extends cdk.Stack {
       })
     );
 
-    // Cost Explorer APIの権限を追加
+    // Cost Explorer APIとPricing APIの権限を追加
     taskRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
           'ce:GetCostAndUsage',
-          'ce:GetTags'
+          'ce:GetTags',
+          'pricing:GetProducts',
+          'sts:GetCallerIdentity'
         ],
         resources: ['*'],
       })

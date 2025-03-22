@@ -31,17 +31,53 @@ export class PipelineStack extends cdk.Stack {
       output: sourceOutput,
     });
 
+    // イメージ定義ファイルを生成するCodeBuildプロジェクト
+    const buildProject = new codebuild.PipelineProject(this, 'ImageDefinitionsProject', {
+      environment: {
+        buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
+        privileged: true,
+      },
+      buildSpec: codebuild.BuildSpec.fromObject({
+        version: '0.2',
+        phases: {
+          build: {
+            commands: [
+              'echo Creating image definitions file',
+              `echo '[{"name":"ApiContainer","imageUri":"${props.ecrRepository.repositoryUri}:latest"}]' > imageDefinitions.json`,
+              'cat imageDefinitions.json',
+            ],
+          },
+        },
+        artifacts: {
+          files: ['imageDefinitions.json'],
+        },
+      }),
+    });
+
+    const buildOutput = new codepipeline.Artifact();
+    const buildAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'CreateImageDefinitions',
+      project: buildProject,
+      input: sourceOutput,
+      outputs: [buildOutput],
+    });
+
     // ECSデプロイアクション
     const deployAction = new codepipeline_actions.EcsDeployAction({
       actionName: 'Deploy',
       service: props.ecsService,
-      imageFile: sourceOutput.atPath('imageDefinitions.json'),
+      imageFile: buildOutput.atPath('imageDefinitions.json'),
     });
 
     // パイプラインにステージを追加
     pipeline.addStage({
       stageName: 'Source',
       actions: [sourceAction],
+    });
+
+    pipeline.addStage({
+      stageName: 'Build',
+      actions: [buildAction],
     });
 
     pipeline.addStage({
