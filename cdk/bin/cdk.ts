@@ -28,8 +28,9 @@ const devopsStack = new DevopsStack(app, 'ProgateHackathonDevopsStack', {
 // APIスタック
 new ApiStack(app, 'ProgateHackathonApiStack', {
   ecrRepository: devopsStack.ecrRepository,
-  domainName: 'aws-village.k1h.dev',
-  certificateArn: 'arn:aws:acm:us-west-2:520070710501:certificate/d905b1f9-d093-4795-b729-7a694737afa7',
+  domainName: 'aws-friends.k1h.dev',
+  // コンソール上で作業して、AWS Certificate Managerで取得した証明書のARNを指定
+  certificateArn: 'arn:aws:acm:us-west-2:520070710501:certificate/55ce4986-b2e0-4780-8862-c34d1a85beb8',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION

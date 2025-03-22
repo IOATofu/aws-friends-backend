@@ -47,6 +47,7 @@ export class ApiStack extends cdk.Stack {
       taskDefinition,
       desiredCount: 2,
       assignPublicIp: false,
+      minHealthyPercent: 100, // タスク更新中もサービスを100%稼働させる
     });
 
     // ALBの作成

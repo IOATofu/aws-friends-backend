@@ -3,6 +3,53 @@ import datetime
 from typing import Dict, List, Optional, Union
 
 
+def get_ec2_list() -> List[Dict[str, str]]:
+    """
+    すべてのEC2インスタンスの一覧を取得します。
+
+    戻り値:
+        List[Dict]: EC2インスタンスの情報を含む辞書のリスト:
+            - instance_id (str): インスタンスID
+            - arn (str): インスタンスのARN
+            - name (str): インスタンス名（Name タグ）
+            - state (str): インスタンスの状態
+    """
+    ec2 = boto3.client("ec2")
+    region = ec2.meta.region_name
+    account_id = boto3.client("sts").get_caller_identity()["Account"]
+
+    # すべてのEC2インスタンスを取得
+    response = ec2.describe_instances()
+    instance_list = []
+
+    # 各インスタンスを処理
+    for reservation in response["Reservations"]:
+        for instance in reservation["Instances"]:
+            # インスタンスのARNを構築
+            instance_arn = (
+                f"arn:aws:ec2:{region}:{account_id}:instance/{instance['InstanceId']}"
+            )
+
+            # Name タグを取得
+            name = "N/A"
+            if "Tags" in instance:
+                for tag in instance["Tags"]:
+                    if tag["Key"] == "Name":
+                        name = tag["Value"]
+                        break
+
+            instance_list.append(
+                {
+                    "instance_id": instance["InstanceId"],
+                    "arn": instance_arn,
+                    "name": name,
+                    "state": instance["State"]["Name"],
+                }
+            )
+
+    return instance_list
+
+
 def get_latest_ec2_metrics(
     minutes_range: int = 30, delay_minutes: int = 2
 ) -> List[Dict[str, Union[str, float, datetime.datetime]]]:
