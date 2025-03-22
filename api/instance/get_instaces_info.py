@@ -121,7 +121,7 @@ async def getInfo():
                     "type": "alb",
                     "name": metric["load_balancer_name"],
                     "arn": arn,
-                    "state": calc_alb(metric["metrics"]["target_response_time"]),
+                    "state": calc_alb(metric["metrics"]["request_count"]),
                     "cost": cost_dict.get(arn, 0),
                 }
             )

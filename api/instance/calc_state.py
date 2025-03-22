@@ -53,7 +53,7 @@ def calc_rds(cpu_utilization, instance_state=None):
     return calc_cpu_state(cpu_utilization)
 
 
-def calc_alb(response_time, status=None):
+def calc_alb(request_count, status=None):
     """
     ALBの状態を計算
 
@@ -65,13 +65,13 @@ def calc_alb(response_time, status=None):
         "low", "medium", "high", "unknown"のいずれか
     """
     # レスポンス時間がない場合
-    if response_time is None:
+    if request_count is None:
         return "unknown"
 
     # レスポンス時間に基づく状態判定
-    if response_time < 0.5:
+    if request_count < 30:
         return "low"  # 0.5秒未満: 低負荷
-    elif response_time < 2:
+    elif request_count < 60:
         return "medium"  # 0.5秒以上2秒未満: 中負荷
     else:
         return "high"  # 2秒以上: 高負荷
