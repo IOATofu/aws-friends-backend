@@ -4,6 +4,7 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 interface ApiStackProps extends cdk.StackProps {
@@ -28,10 +29,38 @@ export class ApiStack extends cdk.Stack {
       clusterName: 'progate-hackathon-cluster',
     });
 
+    // CloudWatchメトリクス取得用のIAMロールを作成
+    const taskRole = new iam.Role(this, 'ApiTaskRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      description: 'Role for API ECS tasks',
+    });
+
+    // CloudWatchメトリクス読み取り権限を追加
+    taskRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchReadOnlyAccess')
+    );
+
+    // EC2インスタンス情報取得用の権限を追加
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ec2:DescribeInstances',
+          'ec2:DescribeInstanceStatus',
+          'elasticloadbalancing:DescribeLoadBalancers',
+          'elasticloadbalancing:DescribeTargetGroups',
+          'elasticloadbalancing:DescribeTargetHealth',
+          'rds:DescribeDBInstances'
+        ],
+        resources: ['*'],
+      })
+    );
+
     // Fargateタスク定義
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDef', {
       memoryLimitMiB: 512,
       cpu: 256,
+      taskRole: taskRole,
     });
 
     // コンテナの追加
