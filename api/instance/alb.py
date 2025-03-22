@@ -86,6 +86,7 @@ def get_latest_alb_metrics(
             continue
 
         load_balancer_name = alb["LoadBalancerName"]
+        load_balancer_Arn = alb["LoadBalancerArn"],
         metrics_data = {
             "request_count": None,
             "target_response_time": None,
@@ -115,6 +116,7 @@ def get_latest_alb_metrics(
 
             # メトリクスデータを処理
             datapoints = metrics["Datapoints"]
+            print(datapoints)
             if datapoints:
                 # タイムスタンプでソートして最新のものを取得
                 datapoints.sort(key=lambda x: x["Timestamp"])
@@ -136,15 +138,14 @@ def get_latest_alb_metrics(
                 # これが最新の場合、タイムスタンプを更新
                 if latest_timestamp is None or latest["Timestamp"] > latest_timestamp:
                     latest_timestamp = latest["Timestamp"]
-
         alb_metrics.append(
             {
                 "load_balancer_name": load_balancer_name,
+                "load_balancer_arn": load_balancer_Arn[0],
                 "metrics": metrics_data,
                 "timestamp": latest_timestamp,
             }
         )
-
     return alb_metrics
 
 

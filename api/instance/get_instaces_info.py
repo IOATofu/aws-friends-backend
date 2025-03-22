@@ -1,7 +1,8 @@
 import boto3
-from instance.ec2 import get_latest_ec2_metrics
-from instance.rds import get_latest_rds_metrics
-from instance.alb import get_alb_list
+from .ec2 import get_latest_ec2_metrics
+from .rds import get_latest_rds_metrics
+from .alb import get_latest_alb_metrics
+from .calc_state import calc_ec2, calc_rds,calc_alb
 
 
 def getInfo():
@@ -21,8 +22,8 @@ def getInfo():
         metrics_data.append(
             {
                 "type": "ec2",
-                "name": "tmp",
                 "arn": f"arn:aws:ec2:{region}:{account_id}:instance/{instance_id}",
+                "state": calc_ec2(metric["cpu_utilization"]),
             }
         )
 
@@ -32,18 +33,18 @@ def getInfo():
         metrics_data.append(
             {
                 "type": "rds",
-                "name": "tmp",
                 "arn": f"arn:aws:rds:{region}:{account_id}:db:{db_name}",
+                "state": calc_rds(metric["metrics"]["cpu_utilization"]),
             }
         )
 
-    alb_list = get_alb_list()
-    for alb in alb_list:
+    alb_metrics = get_latest_alb_metrics()
+    for metric in alb_metrics:
         metrics_data.append(
             {
                 "type": "alb",
-                "name": "tmp",
-                "arn": alb["arn"],
+                "arn": metric["load_balancer_arn"],
+                "state": calc_alb(),
             }
         )
     return metrics_data
