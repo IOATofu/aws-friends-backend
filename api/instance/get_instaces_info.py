@@ -1,7 +1,7 @@
 import boto3
-from alb import get_latest_alb_metrics
-from ec2 import get_latest_ec2_metrics
-from rds import get_latest_rds_metrics
+from instance.ec2 import get_latest_ec2_metrics
+from instance.rds import get_latest_rds_metrics
+from instance.alb import get_latest_alb_metrics
 
 
 def getInfo():
