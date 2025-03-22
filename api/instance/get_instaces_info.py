@@ -7,7 +7,7 @@ from .calc_state import calc_ec2, calc_rds, calc_alb
 from .cost import estimate_realtime_cost_by_arn
 
 # メトリクス取得の時間範囲設定
-minutes_range = 15  # 15分間のデータのみ取得
+minutes_range = 1  # 15分間のデータのみ取得
 delay_minutes = 0  # 遅延なし
 
 
