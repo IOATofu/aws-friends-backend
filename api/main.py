@@ -12,11 +12,6 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-
 @app.post("/chat")
 async def chat(arn: str = Form()):
     # モックレスポンスを返す
