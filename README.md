@@ -15,3 +15,13 @@ $ .venv\Scripts\activate # Windows
 ```
 # uv pip install <package>
 ```
+
+
+## AWS CodeBuildの環境変数更新
+
+```bash
+aws codebuild update-project --name progate-hackathon-backend \
+  --environment-variables name=AWS_DEFAULT_REGION,value=us-west-2,type=PLAINTEXT \
+                         name=AWS_ACCOUNT_ID,value=520070710501,type=PLAINTEXT \
+                         name=IMAGE_REPO_NAME,value=progate-hackathon-api,type=PLAINTEXT
+```
