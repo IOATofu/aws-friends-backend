@@ -89,7 +89,7 @@ async def chat(arn: str = Form()):
     # モックレスポンスを返す
     return {
         "arn": arn,
-        "return": {
+        "return_message": {
             "role": "assistant",
             "message": message,
         },
