@@ -17,9 +17,26 @@ async def root():
 
 
 @app.post("/chat")
-async def chat(text: str = Form()):
-    return {"message": "chat"}
+async def chat(arn: str = Form()):
+    # モックレスポンスを返す
+    return {
+        "arn": arn,
+        "return": {
+            "role": "assistant",
+            "message": "こんにちは！！今現在異常は無いよ！"
+        }
+    }
 
+@app.post("/talk")
+async def talk(arn: str = Form(), log: list = Form()):
+    # モックレスポンスを返す
+    return {
+        "arn": arn,
+        "return": {
+            "role": "assistant",
+            "message": "元気だよ！！今はだいぶ余裕があるみたい！"
+        }
+    }
 
 @app.get("/instances")
 async def get_instances():
