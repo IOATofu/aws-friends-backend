@@ -77,10 +77,10 @@ export class ApiStack extends cdk.Stack {
       })
     );
 
-    // Fargateタスク定義
+    // Fargateタスク定義（リソースを増強）
     this.taskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDef', {
-      memoryLimitMiB: 512,
-      cpu: 256,
+      memoryLimitMiB: 2048,  // 2GB
+      cpu: 1024,            // 1 vCPU
       taskRole: taskRole,
     });
 

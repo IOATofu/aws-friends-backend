@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, Form, Query
-from instance import get_alb_list, getInfo ,get_instance_costs
+from instance import get_alb_list, getInfo, get_instance_costs
 import uvicorn
 
 app = FastAPI()
@@ -44,6 +44,7 @@ async def get_albs():
     """ALBの一覧を取得するエンドポイント"""
     return get_alb_list()
 
+
 @app.get("/costs")
 async def get_costs(days: int = Query(default=30, ge=1, le=365)):
     """
@@ -55,7 +56,7 @@ async def get_costs(days: int = Query(default=30, ge=1, le=365)):
     Returns:
         List[Dict]: インスタンスごとの課金情報
     """
-    return get_instance_costs(days)
+    return await get_instance_costs(days)
 
 
 if __name__ == "__main__":
