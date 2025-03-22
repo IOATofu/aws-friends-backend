@@ -1,6 +1,7 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, Query
 from instance.get_instaces_info import getInfo
 from instance.alb import get_alb_list
+from instance.cost import get_instance_costs
 import uvicorn
 
 app = FastAPI()
@@ -48,6 +49,20 @@ async def get_loadstate():
 @app.put("/load-state")
 async def put_loadstate(text: str = Form()):
     return {"message": "load-state"}
+
+
+@app.get("/costs")
+async def get_costs(days: int = Query(default=30, ge=1, le=365)):
+    """
+    インスタンスごとの課金情報を取得します。
+
+    Args:
+        days (int): 取得する期間（日数）。1-365の範囲で指定可能。デフォルトは30日。
+
+    Returns:
+        List[Dict]: インスタンスごとの課金情報
+    """
+    return get_instance_costs(days)
 
 
 if __name__ == "__main__":

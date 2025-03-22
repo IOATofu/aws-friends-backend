@@ -56,6 +56,18 @@ export class ApiStack extends cdk.Stack {
       })
     );
 
+    // Cost Explorer APIの権限を追加
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ce:GetCostAndUsage',
+          'ce:GetTags'
+        ],
+        resources: ['*'],
+      })
+    );
+
     // Fargateタスク定義
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDef', {
       memoryLimitMiB: 512,
