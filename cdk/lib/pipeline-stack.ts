@@ -29,50 +29,13 @@ export class PipelineStack extends cdk.Stack {
     // ソースステージ（ECRソース）
     const sourceOutput = new codepipeline.Artifact();
 
-    // ECRリポジトリからイメージダイジェストを取得するLambda関数
-    const getImageDigestLambda = new lambda.Function(this, 'GetImageDigestLambda', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        const ecr = new AWS.ECR();
-        
-        exports.handler = async () => {
-          const params = {
-            repositoryName: process.env.REPOSITORY_NAME,
-            imageIds: [{ imageTag: 'latest' }]
-          };
-          
-          try {
-            const data = await ecr.describeImages(params).promise();
-            if (data.imageDetails && data.imageDetails.length > 0) {
-              const imageDigest = data.imageDetails[0].imageDigest;
-              console.log('Image digest:', imageDigest);
-              return {
-                imageDigest: imageDigest
-              };
-            }
-            throw new Error('No image found');
-          } catch (error) {
-            console.error('Error:', error);
-            throw error;
-          }
-        }
-      `),
-      environment: {
-        REPOSITORY_NAME: props.ecrRepository.repositoryName
-      },
-      timeout: cdk.Duration.seconds(30)
-    });
+    // イメージダイジェストを取得するLambda関数は不要なので削除
 
-    // Lambda関数にECRの読み取り権限を付与
-    props.ecrRepository.grantRead(getImageDigestLambda);
-
-    // ECRソースアクション（ダイジェストを使用）
+    // ECRソースアクション（イメージタグを使用）
     const sourceAction = new codepipeline_actions.EcrSourceAction({
       actionName: 'ECR',
       repository: props.ecrRepository,
-      imageTag: 'latest', // 初期取得用にlatestを使用
+      imageTag: 'latest', // ビルド成功時に使用するタグ
       output: sourceOutput,
     });
 
@@ -85,17 +48,10 @@ export class PipelineStack extends cdk.Stack {
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
         phases: {
-          pre_build: {
-            commands: [
-              'echo Getting image digest from ECR...',
-              'IMAGE_DIGEST=$(aws ecr describe-images --repository-name $(echo $ECR_REPOSITORY_URI | cut -d/ -f2) --image-ids imageTag=latest --query "imageDetails[0].imageDigest" --output text)',
-              'echo Image digest: $IMAGE_DIGEST',
-            ]
-          },
           build: {
             commands: [
-              'echo Creating image definitions file with digest',
-              'echo \'[{"name":"ApiContainer","imageUri":"\'$ECR_REPOSITORY_URI\'@\'$IMAGE_DIGEST\'"}]\' > imageDefinitions.json',
+              'echo Creating image definitions file with specific tag',
+              'echo \'[{"name":"ApiContainer","imageUri":"\'$ECR_REPOSITORY_URI\':latest"}]\' > imageDefinitions.json',
               'cat imageDefinitions.json',
             ],
           },

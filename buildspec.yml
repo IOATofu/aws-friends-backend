@@ -21,12 +21,9 @@ phases:
       - echo Pushing the Docker image...
       - docker push ${REPOSITORY_URI}:${IMAGE_TAG}
       # latestタグはプッシュしない
-      - echo Getting image digest...
-      - aws ecr describe-images --repository-name ${IMAGE_REPO_NAME} --image-ids imageTag=${IMAGE_TAG} --query imageDetails[0].imageDigest --output text > image-digest.txt
-      - IMAGE_DIGEST=$(cat image-digest.txt)
-      - echo "Image digest: $IMAGE_DIGEST"
-      - echo Writing image definitions file with digest...
-      - echo "[{\"name\":\"api-container\",\"imageUri\":\"${REPOSITORY_URI}@${IMAGE_DIGEST}\"}]" > imageDefinitions.json
+      - echo Writing image definitions file with specific tag...
+      - echo "[{\"name\":\"api-container\",\"imageUri\":\"${REPOSITORY_URI}:${IMAGE_TAG}\"}]" > imageDefinitions.json
+      - cat imageDefinitions.json
       - cat imageDefinitions.json
 
 artifacts:
