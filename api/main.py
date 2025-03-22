@@ -91,7 +91,7 @@ async def chat(arn: str = Form()):
         "arn": arn,
         "return_message": {
             "role": "assistant",
-            "message": message,
+            "message": message.replace("\n\n", "\n"),
         },
     }
 
@@ -108,7 +108,7 @@ async def talk(data: dict = Body(...)):
             "arn": arn,
             "return_message": {
                 "role": "assistant",
-                "message": message,
+                "message": message.replace("\n\n", "\n"),
             },
         }
     except Exception as e:
