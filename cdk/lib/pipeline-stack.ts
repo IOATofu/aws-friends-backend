@@ -202,15 +202,60 @@ export class PipelineStack extends cdk.Stack {
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
+        const https = require('https');
         const codepipeline = new AWS.CodePipeline();
         const dynamodb = new AWS.DynamoDB.DocumentClient();
+        
+        const sendDiscordNotification = async (message, color) => {
+          const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+          if (!webhookUrl) return;
+
+          const data = JSON.stringify({
+            embeds: [{
+              title: 'ECSタスク更新通知',
+              description: message,
+              color: color,
+              timestamp: new Date().toISOString()
+            }]
+          });
+
+          const options = {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': data.length,
+            }
+          };
+
+          return new Promise((resolve, reject) => {
+            const req = https.request(webhookUrl, options, (res) => {
+              let responseData = '';
+              res.on('data', (chunk) => { responseData += chunk; });
+              res.on('end', () => { resolve(responseData); });
+            });
+            req.on('error', (error) => { reject(error); });
+            req.write(data);
+            req.end();
+          });
+        };
         
         exports.handler = async (event) => {
           const pipelineName = event.detail.pipeline;
           const executionId = event.detail['execution-id'];
+          const state = event.detail.state;
           
-          console.log(\`Pipeline \${pipelineName} execution \${executionId} failed\`);
+          console.log(\`Pipeline \${pipelineName} execution \${executionId} state: \${state}\`);
           
+          // 成功時の通知
+          if (state === 'SUCCEEDED') {
+            await sendDiscordNotification(
+              \`✅ パイプライン \${pipelineName} のタスク更新が成功しました\n実行ID: \${executionId}\`,
+              0x00ff00 // 緑色
+            );
+            return;
+          }
+          
+          // 失敗時の処理
           const params = {
             TableName: process.env.FAILURE_COUNT_TABLE,
             Key: { pipelineName: pipelineName }
@@ -225,6 +270,12 @@ export class PipelineStack extends cdk.Stack {
             TableName: process.env.FAILURE_COUNT_TABLE,
             Item: { pipelineName: pipelineName, count: failureCount }
           }).promise();
+          
+          // Discord通知（失敗）
+          await sendDiscordNotification(
+            \`❌ パイプライン \${pipelineName} のタスク更新が失敗しました\n実行ID: \${executionId}\n失敗回数: \${failureCount}\`,
+            0xff0000 // 赤色
+          );
           
           if (failureCount >= parseInt(process.env.MAX_FAILURES)) {
             console.log(\`Disabling pipeline \${pipelineName} after \${failureCount} failures\`);
@@ -242,12 +293,19 @@ export class PipelineStack extends cdk.Stack {
               TableName: process.env.FAILURE_COUNT_TABLE,
               Item: { pipelineName: pipelineName, count: 0 }
             }).promise();
+            
+            // パイプライン無効化の通知
+            await sendDiscordNotification(
+              \`⚠️ パイプライン \${pipelineName} が連続失敗により無効化されました\n実行ID: \${executionId}\`,
+              0xffa500 // オレンジ色
+            );
           }
         }
       `),
       environment: {
         FAILURE_COUNT_TABLE: failureCountTable.tableName,
-        MAX_FAILURES: '3'
+        MAX_FAILURES: '3',
+        DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || ''
       },
       timeout: cdk.Duration.seconds(30)
     });
@@ -283,10 +341,35 @@ export class PipelineStack extends cdk.Stack {
         }
       }
     });
+    // パイプライン成功時のイベントルール作成
+    const buildPipelineSuccessRule = new events.Rule(this, 'BuildPipelineSuccessRule', {
+      eventPattern: {
+        source: ['aws.codepipeline'],
+        detailType: ['CodePipeline Pipeline Execution State Change'],
+        detail: {
+          state: ['SUCCEEDED'],
+          pipeline: [buildPipeline.pipelineName]
+        }
+      }
+    });
+
+    const deployPipelineSuccessRule = new events.Rule(this, 'DeployPipelineSuccessRule', {
+      eventPattern: {
+        source: ['aws.codepipeline'],
+        detailType: ['CodePipeline Pipeline Execution State Change'],
+        detail: {
+          state: ['SUCCEEDED'],
+          pipeline: [deployPipeline.pipelineName]
+        }
+      }
+    });
 
     buildPipelineFailureRule.addTarget(new targets.LambdaFunction(pipelineFailureHandler));
     deployPipelineFailureRule.addTarget(new targets.LambdaFunction(pipelineFailureHandler));
+    buildPipelineSuccessRule.addTarget(new targets.LambdaFunction(pipelineFailureHandler));
+    deployPipelineSuccessRule.addTarget(new targets.LambdaFunction(pipelineFailureHandler));
 
+    // 出力の追加
     // 出力の追加
     new cdk.CfnOutput(this, 'BuildPipelineName', {
       value: buildPipeline.pipelineName,
