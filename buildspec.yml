@@ -13,16 +13,20 @@ phases:
       - echo Build started on `date`
       - echo Building the Docker image...
       - docker build -t ${REPOSITORY_URI}:${IMAGE_TAG} -f docker/api/Dockerfile .
-      - docker tag ${REPOSITORY_URI}:${IMAGE_TAG} ${REPOSITORY_URI}:latest
+      # latestタグは作成しない
   
   post_build:
     commands:
       - echo Build completed on `date`
       - echo Pushing the Docker image...
       - docker push ${REPOSITORY_URI}:${IMAGE_TAG}
-      - docker push ${REPOSITORY_URI}:latest
-      - echo Writing image definitions file...
-      - printf '[{"name":"api-container","imageUri":"%s"}]' ${REPOSITORY_URI}:${IMAGE_TAG} > imageDefinitions.json
+      # latestタグはプッシュしない
+      - echo Getting image digest...
+      - IMAGE_DIGEST=$(aws ecr describe-images --repository-name ${IMAGE_REPO_NAME} --image-ids imageTag=${IMAGE_TAG} --query 'imageDetails[0].imageDigest' --output text)
+      - echo Image digest: $IMAGE_DIGEST
+      - echo Writing image definitions file with digest...
+      - printf '[{"name":"api-container","imageUri":"%s@%s"}]' ${REPOSITORY_URI} ${IMAGE_DIGEST} > imageDefinitions.json
+      - cat imageDefinitions.json
 
 artifacts:
   files:
