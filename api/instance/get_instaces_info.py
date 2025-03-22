@@ -54,46 +54,58 @@ async def getInfo():
     ec2_metrics, rds_metrics, alb_metrics = await get_all_metrics_async()
     cost_dict = await get_cost_dict()
 
-    # EC2メトリクスの処理
+    # EC2メトリクスの処理 - 起動中のインスタンスのみ
     for metric in ec2_metrics:
         instance_id = metric["instance_id"]
-        arn = f"arn:aws:ec2:{region}:{account_id}:instance/{instance_id}"
-        metrics_data.append(
-            {
-                "type": "ec2",
-                "name": metric["instance_name"],
-                "arn": arn,
-                "state": calc_ec2(metric["cpu_utilization"]),
-                "cost": cost_dict[arn],
-            }
-        )
+        instance_state = metric.get("instance_state", "")
 
-    # RDSメトリクスの処理
+        # 起動中のインスタンスのみを処理
+        if instance_state == "running":
+            arn = f"arn:aws:ec2:{region}:{account_id}:instance/{instance_id}"
+            metrics_data.append(
+                {
+                    "type": "ec2",
+                    "name": metric["instance_name"],
+                    "arn": arn,
+                    "state": calc_ec2(metric["cpu_utilization"]),
+                    "cost": cost_dict.get(arn, 0),
+                }
+            )
+
+    # RDSメトリクスの処理 - 利用可能なインスタンスのみ
     for metric in rds_metrics:
         db_name = metric["db_instance_identifier"]
-        arn = f"arn:aws:rds:{region}:{account_id}:db:{db_name}"
-        metrics_data.append(
-            {
-                "type": "rds",
-                "name": metric["db_instance_identifier"],
-                "arn": arn,
-                "state": calc_rds(metric["metrics"]["cpu_utilization"]),
-                "cost": cost_dict[arn],
-            }
-        )
+        db_status = metric.get("db_instance_status", "")
 
-    # ALBメトリクスの処理
+        # 利用可能なインスタンスのみを処理
+        if db_status == "available":
+            arn = f"arn:aws:rds:{region}:{account_id}:db:{db_name}"
+            metrics_data.append(
+                {
+                    "type": "rds",
+                    "name": db_name,
+                    "arn": arn,
+                    "state": calc_rds(metric["metrics"]["cpu_utilization"]),
+                    "cost": cost_dict.get(arn, 0),
+                }
+            )
+
+    # ALBメトリクスの処理 - アクティブなロードバランサーのみ
     for metric in alb_metrics:
-        arn = metric["load_balancer_arn"]
-        metrics_data.append(
-            {
-                "type": "alb",
-                "name": metric["load_balancer_name"],
-                "arn": arn,
-                "state": calc_alb(metric["metrics"]["target_response_time"]),
-                "cost": cost_dict[arn],
-            }
-        )
+        lb_state = metric.get("state", "")
+
+        # アクティブなロードバランサーのみを処理
+        if lb_state == "active":
+            arn = metric["load_balancer_arn"]
+            metrics_data.append(
+                {
+                    "type": "alb",
+                    "name": metric["load_balancer_name"],
+                    "arn": arn,
+                    "state": calc_alb(metric["metrics"]["target_response_time"]),
+                    "cost": cost_dict.get(arn, 0),
+                }
+            )
     return metrics_data
 
 
