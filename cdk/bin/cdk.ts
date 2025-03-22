@@ -3,18 +3,21 @@ import * as cdk from 'aws-cdk-lib';
 import { CdkStack } from '../lib/cdk-stack';
 
 const app = new cdk.App();
-new CdkStack(app, 'CdkStack', {
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and context lookups will not work,
-   * but a single synthesized template can be deployed anywhere. */
+new CdkStack(app, 'ProgateHackathonStack', {
+  /* 環境を指定しない場合、このスタックは環境に依存しません。
+   * アカウント/リージョンに依存する機能やコンテキストの参照は機能しませんが、
+   * 生成されたテンプレートはどこにでもデプロイできます。 */
 
-  /* Uncomment the next line to specialize this stack for the AWS Account
-   * and Region that are implied by the current CLI configuration. */
-  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+  // 現在のCLI設定から暗黙的に決定されるAWSアカウントとリージョンを使用
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION
+  },
 
-  /* Uncomment the next line if you know exactly what Account and Region you
-   * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
-
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+  // タグを追加（オプション）
+  tags: {
+    Environment: 'development',
+    Project: 'progate-hackathon',
+    ManagedBy: 'cdk'
+  }
 });
