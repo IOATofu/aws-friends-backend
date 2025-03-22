@@ -78,7 +78,9 @@ async def getInfo():
             {
                 "type": "alb",
                 "arn": arn,
-                "state": calc_alb(),
+                "state": calc_alb(
+                    metric["metrics"]["target_response_time"]
+                ),
                 "cost": cost_dict[arn],
             }
         )
