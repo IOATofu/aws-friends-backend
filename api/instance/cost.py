@@ -10,8 +10,19 @@ REGION_TO_LOCATION = {
     "us-west-2": "US West (Oregon)",
     # 必要に応じて追加
 }
-def get_instance_costs():
-    return 0
+
+
+def get_instance_costs(days: int = 30):
+    """
+    指定された日数分のインスタンスのコストを取得する関数
+    Args:
+        days: 取得する期間（日数）。デフォルトは30日
+    Returns:
+        コスト情報のリスト
+    """
+    # 現時点では日数は使用せずに、現在稼働中のリソースの料金を返す
+    return estimate_realtime_cost_by_arn()
+
 
 def get_ec2_price(
     instance_type: str, location: str, operating_system: str = "Linux"
