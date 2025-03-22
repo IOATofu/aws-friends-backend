@@ -22,13 +22,13 @@ phases:
       - docker push ${REPOSITORY_URI}:${IMAGE_TAG}
       - docker push ${REPOSITORY_URI}:latest
       - echo Writing image definitions file...
-      - echo "[{\"name\":\"ApiContainer\",\"imageUri\":\"${REPOSITORY_URI}:${IMAGE_TAG}\"}]" > ./imageDefinitions.json
-      - cat ./imageDefinitions.json
+      - echo "[{\"name\":\"ApiContainer\",\"imageUri\":\"${REPOSITORY_URI}:${IMAGE_TAG}\"}]" > imageDefinitions.json
+      - cat imageDefinitions.json
 
 artifacts:
+  base-directory: .
   files:
-    - ./imageDefinitions.json
-  discard-paths: yes
+    - imageDefinitions.json
 
 cache:
   paths:
