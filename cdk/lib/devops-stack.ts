@@ -27,6 +27,7 @@ export class DevopsStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ApiRepositoryUrl', {
       value: this.ecrRepository.repositoryUri,
     });
+
     // Output ECR Repository Name
     new cdk.CfnOutput(this, 'ApiRepositoryName', {
       value: this.ecrRepository.repositoryName,

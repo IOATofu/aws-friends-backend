@@ -2,42 +2,38 @@
 import * as cdk from 'aws-cdk-lib';
 import { DevopsStack } from '../lib/devops-stack';
 import { ApiStack } from '../lib/api-stack';
+import { PipelineStack } from '../lib/pipeline-stack';
 
 const app = new cdk.App();
 
-// DevOpsスタック
-const devopsStack = new DevopsStack(app, 'ProgateHackathonDevopsStack', {
-  /* 環境を指定しない場合、このスタックは環境に依存しません。
-   * アカウント/リージョンに依存する機能やコンテキストの参照は機能しませんが、
-   * 生成されたテンプレートはどこにでもデプロイできます。 */
-
-  // 現在のCLI設定から暗黙的に決定されるAWSアカウントとリージョンを使用
+// 共通のスタックProps
+const commonProps = {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION
   },
-
-  // タグを追加（オプション）
   tags: {
     Environment: 'development',
     Project: 'progate-hackathon',
     ManagedBy: 'cdk'
   }
-});
+};
 
-// APIスタック
-new ApiStack(app, 'ProgateHackathonApiStack', {
+// DevOpsスタック（ECRリポジトリの作成）
+const devopsStack = new DevopsStack(app, 'ProgateHackathonDevopsStack', commonProps);
+
+// APIスタック（ECSサービスの作成）
+const apiStack = new ApiStack(app, 'ProgateHackathonApiStack', {
+  ...commonProps,
   ecrRepository: devopsStack.ecrRepository,
   domainName: 'aws-friends.k1h.dev',
-  // コンソール上で作業して、AWS Certificate Managerで取得した証明書のARNを指定
   certificateArn: 'arn:aws:acm:us-west-2:520070710501:certificate/55ce4986-b2e0-4780-8862-c34d1a85beb8',
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION
-  },
-  tags: {
-    Environment: 'development',
-    Project: 'progate-hackathon',
-    ManagedBy: 'cdk'
-  }
+});
+
+// パイプラインスタック（CI/CDパイプラインの作成）
+new PipelineStack(app, 'ProgateHackathonPipelineStack', {
+  ...commonProps,
+  ecrRepository: devopsStack.ecrRepository,
+  ecsService: apiStack.service,
+  ecsCluster: apiStack.cluster,
 });

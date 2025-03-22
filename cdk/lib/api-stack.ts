@@ -8,14 +8,21 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 interface ApiStackProps extends cdk.StackProps {
-  ecrRepository: ecr.IRepository;
+  ecrRepository?: ecr.IRepository;
   domainName?: string;
   certificateArn?: string;
 }
 
 export class ApiStack extends cdk.Stack {
+  public readonly service: ecs.FargateService;
+  public readonly cluster: ecs.Cluster;
+  private taskDefinition: ecs.FargateTaskDefinition;
+  private ecrRepository?: ecr.IRepository;
+
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
+
+    this.ecrRepository = props.ecrRepository;
 
     // VPCの作成
     const vpc = new ec2.Vpc(this, 'ApiVpc', {
@@ -24,7 +31,7 @@ export class ApiStack extends cdk.Stack {
     });
 
     // ECSクラスターの作成
-    const cluster = new ecs.Cluster(this, 'ApiCluster', {
+    this.cluster = new ecs.Cluster(this, 'ApiCluster', {
       vpc,
       clusterName: 'progate-hackathon-cluster',
     });
@@ -69,26 +76,30 @@ export class ApiStack extends cdk.Stack {
     );
 
     // Fargateタスク定義
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDef', {
+    this.taskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDef', {
       memoryLimitMiB: 512,
       cpu: 256,
       taskRole: taskRole,
     });
 
-    // コンテナの追加
-    taskDefinition.addContainer('ApiContainer', {
-      image: ecs.ContainerImage.fromEcrRepository(props.ecrRepository, 'latest'),
-      portMappings: [{ containerPort: 8080 }], // FastAPIのデフォルトポート
+    // コンテナの追加（ECRリポジトリが設定されていない場合は一時的なイメージを使用）
+    const containerImage = this.ecrRepository
+      ? ecs.ContainerImage.fromEcrRepository(this.ecrRepository, 'latest')
+      : ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample');
+
+    this.taskDefinition.addContainer('ApiContainer', {
+      image: containerImage,
+      portMappings: [{ containerPort: 8080 }],
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'ApiContainer' }),
     });
 
     // Fargateサービスの作成
-    const service = new ecs.FargateService(this, 'ApiService', {
-      cluster,
-      taskDefinition,
+    this.service = new ecs.FargateService(this, 'ApiService', {
+      cluster: this.cluster,
+      taskDefinition: this.taskDefinition,
       desiredCount: 2,
       assignPublicIp: false,
-      minHealthyPercent: 100, // タスク更新中もサービスを100%稼働させる
+      minHealthyPercent: 100,
     });
 
     // ALBの作成
@@ -104,7 +115,6 @@ export class ApiStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    // HTTP & HTTPSトラフィックを許可
     albSg.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
@@ -128,11 +138,10 @@ export class ApiStack extends cdk.Stack {
       'Allow traffic from ALB'
     );
 
-    // セキュリティグループをALBとサービスに適用
     alb.addSecurityGroup(albSg);
-    service.connections.addSecurityGroup(serviceSg);
+    this.service.connections.addSecurityGroup(serviceSg);
 
-    // HTTPリスナーの作成（HTTPSにリダイレクト）
+    // HTTPリスナーの作成
     const httpListener = alb.addListener('HttpListener', {
       port: 80,
       defaultAction: elbv2.ListenerAction.redirect({
@@ -158,7 +167,7 @@ export class ApiStack extends cdk.Stack {
     // メインのターゲットグループを作成
     const targetGroup = httpsListener.addTargets('ApiTarget', {
       port: 8080,
-      targets: [service],
+      targets: [this.service],
       healthCheck: {
         path: '/health',
         unhealthyThresholdCount: 2,
@@ -193,5 +202,29 @@ export class ApiStack extends cdk.Stack {
         description: 'Custom domain name',
       });
     }
+  }
+
+  // ECRリポジトリを後から設定するメソッド
+  public addEcrRepository(repository: ecr.IRepository) {
+    this.ecrRepository = repository;
+
+    // 新しいタスク定義を作成
+    const newTaskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDefWithEcr', {
+      memoryLimitMiB: 512,
+      cpu: 256,
+      taskRole: this.taskDefinition.taskRole,
+    });
+
+    // 新しいコンテナを追加
+    newTaskDefinition.addContainer('ApiContainer', {
+      image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
+      portMappings: [{ containerPort: 8080 }],
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'ApiContainer' }),
+    });
+
+    // サービスを新しいタスク定義で更新
+    this.service.node.tryRemoveChild('TaskDefinition');
+    this.service.node.addDependency(newTaskDefinition);
+    this.taskDefinition = newTaskDefinition;
   }
 }
