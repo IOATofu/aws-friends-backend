@@ -10,14 +10,14 @@ export default {
         type: "",
         name: ""
       },
+      log : [],
       chara_txt:'',
       user_txt:''
     }
   },
   watch: {
     selectedinstance() {
-      this.chara_txt = ''
-      this.click2(this.selectedinstance.arn,"")
+      this.click2()
     },
   },
   methods: {
@@ -25,7 +25,14 @@ export default {
       this.instances = await tmpWebApi.getInstances()
     },
     click2: async function (arn,message) {
-      this.chara_txt = await tmpWebApi.postTalk(arn,message)
+      var arn = this.selectedinstance.arn
+      this.log.push({
+              "role": "user",
+              "message": this.user_txt
+          })
+      var _response = await tmpWebApi.postTalk(arn,this.log)
+      this.log.push(_response)
+      this.chara_txt = _response.message
     },
   }
 };
