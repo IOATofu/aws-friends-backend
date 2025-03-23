@@ -10,7 +10,8 @@ export default {
         type: "",
         name: ""
       },
-      chara_txt:"aaa"
+      chara_txt:'',
+      user_txt:''
     }
   },
   watch: {
@@ -50,13 +51,13 @@ export default {
     </div>
     <br><br>
     
-    <div v-if="selectedinstance.type != ''">
+    <div v-if="chara_txt != ''">
       <p>選択されたインスタンス<br>
       {{ selectedinstance.type }}/{{ selectedinstance.name }}:</p>
       <textarea
           v-model="chara_txt"
           id="instanceTextArea"
-          rows="5"
+          rows="8"
           cols="60"
           readonly
         />
@@ -64,11 +65,12 @@ export default {
 
       あなた:<br>
       <textarea
+          v-model="user_txt"
           id="userTextArea"
-          rows="5"
+          rows="8"
           cols="60"
         />
-      <input type="button" value="送信" @click="click2()" />
+      <input type="button" value="送信" @click="click2(selectedinstance.arn,user_txt)" />
     </div>
   </div>
 </template>

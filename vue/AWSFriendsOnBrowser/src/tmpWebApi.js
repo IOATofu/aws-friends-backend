@@ -31,7 +31,8 @@ export default {
             console.log({ axios: this.axios });
             const response = await axios.post(url2, contents, options);
             console.log("データの取得に成功しました");
-            return response.data;
+            console.log(response.data.return_message)
+            return response.data.return_message.message;
         } catch (error) {
             alert("ネットワークエラー");
             console.error(error);
