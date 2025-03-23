@@ -16,21 +16,15 @@ export default {
   },
   watch: {
     selectedinstance() {
-      var log = [
-              {
-                  "role": "user",
-                  "message": ""
-              }
-          ]
-      this.click2(this.selectedinstance.arn,log)
+      this.click2(this.selectedinstance.arn,"")
     },
   },
   methods: {
     click: async function () {
       this.instances = await tmpWebApi.getInstances()
     },
-    click2: async function (arn,log) {
-      this.chara_txt = await tmpWebApi.postTalk(arn,log)
+    click2: async function (arn,message) {
+      this.chara_txt = await tmpWebApi.postTalk(arn,message)
     },
   }
 };

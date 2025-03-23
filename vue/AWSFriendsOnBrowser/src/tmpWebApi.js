@@ -16,12 +16,18 @@ export default {
             console.error("データ取得に失敗しました", error);
         }
     },
-    postTalk:async function (arn,log) {
+    postTalk: async function (arn, message) {
         const options = {
             headers: {
                 "content-type": "application/json",
             }
         }
+        var log = [
+            {
+                "role": "user",
+                "message": message
+            }
+        ]
         const contents = {
             "arn": arn,
             "log": log
