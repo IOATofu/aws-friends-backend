@@ -50,9 +50,24 @@ export class PipelineStack extends cdk.Stack {
       connectionArn: githubConnection.attrConnectionArn,
       output: sourceOutput,
       triggerOnPush: true,
+      // 監視するファイルパスを指定
+      codeBuildCloneOutput: true,
     });
 
-    // Dockerイメージをビルドしてプッシュするビルドプロジェクト
+    // mainブランチのpushのみを検知するイベントルール
+    const sourceRule = new events.Rule(this, 'SourceRule', {
+      eventPattern: {
+        source: ['aws.codestar-connections'],
+        detailType: ['CodeStarSourceConnection Repository State Change'],
+        detail: {
+          referenceType: ['branch'],
+          referenceName: ['main'],
+          repositoryName: ['aws-friends-backend']
+        }
+      }
+    });
+
+    // ビルドプロジェクトの設定を更新
     const buildProject = new codebuild.PipelineProject(this, 'BuildProject', {
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
@@ -62,7 +77,45 @@ export class PipelineStack extends cdk.Stack {
         codebuild.LocalCacheMode.DOCKER_LAYER,
         codebuild.LocalCacheMode.CUSTOM
       ),
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspec-build.yml'),
+      buildSpec: codebuild.BuildSpec.fromObject({
+        version: '0.2',
+        phases: {
+          pre_build: {
+            commands: [
+              'echo Checking if API files changed...',
+              'git diff --name-only HEAD^ HEAD > changes.txt',
+              'if ! grep -q -E "^(api/|docker/api/)" changes.txt; then echo "No changes in API files. Skipping build."; exit 0; fi',
+              'echo API files changed. Proceeding with build...',
+              'echo Logging in to Amazon ECR...',
+              'aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com',
+              'REPOSITORY_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}',
+              'IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)'
+            ]
+          },
+          build: {
+            commands: [
+              'echo Build started on `date`',
+              'echo Building the Docker image...',
+              'docker build -t ${REPOSITORY_URI}:${IMAGE_TAG} -f docker/api/Dockerfile .',
+              'docker tag ${REPOSITORY_URI}:${IMAGE_TAG} ${REPOSITORY_URI}:latest'
+            ]
+          },
+          post_build: {
+            commands: [
+              'echo Build completed on `date`',
+              'echo Pushing the Docker images...',
+              'docker push ${REPOSITORY_URI}:${IMAGE_TAG}',
+              'docker push ${REPOSITORY_URI}:latest'
+            ]
+          }
+        },
+        cache: {
+          paths: [
+            '/root/.cache/pip/**/*',
+            '/root/.docker/buildkit'
+          ]
+        }
+      }),
       environmentVariables: {
         'AWS_ACCOUNT_ID': {
           value: process.env.CDK_DEFAULT_ACCOUNT || this.account
@@ -75,6 +128,9 @@ export class PipelineStack extends cdk.Stack {
         }
       }
     });
+
+    // イベントルールのターゲットとしてビルドパイプラインを追加
+    sourceRule.addTarget(new targets.CodePipeline(buildPipeline));
 
     props.ecrRepository.grantPullPush(buildProject);
 
