@@ -2,6 +2,7 @@ import boto3
 import datetime
 import concurrent.futures
 from typing import Dict, List, Optional, Union
+from datetime import timezone, timedelta
 
 
 def get_alb_list() -> List[Dict[str, str]]:
@@ -96,6 +97,9 @@ def get_latest_alb_metrics(
     # 各ALBのメトリクスをバッチで取得
     alb_metrics = []
 
+    # JSTタイムゾーンを定義
+    JST = timezone(timedelta(hours=9))
+
     for alb in application_lbs:
         load_balancer_name = alb["LoadBalancerName"]
         load_balancer_arn = alb["LoadBalancerArn"]
@@ -164,6 +168,10 @@ def get_latest_alb_metrics(
         # ロードバランサーの状態を取得
         lb_state = alb.get("State", {}).get("Code", "unknown")
 
+        # タイムスタンプをJSTに変換
+        if latest_timestamp:
+            latest_timestamp = latest_timestamp.astimezone(JST)
+
         alb_metrics.append(
             {
                 "load_balancer_name": load_balancer_name,
@@ -175,6 +183,130 @@ def get_latest_alb_metrics(
         )
 
     print(f"{len(alb_metrics)}個のALBのメトリクスを取得しました")
+    return alb_metrics
+
+
+def get_alb_metrics_over_time(
+    minutes_range: int = 15, delay_minutes: int = 0, interval_minutes: int = 10
+) -> List[Dict[str, Union[str, List[Dict[str, Union[float, str]]]]]]:
+    """
+    すべてのApplication Load Balancerの指定された時間範囲内のメトリクスを取得します。
+
+    引数:
+        minutes_range (int): メトリクスを取得する過去の分数（デフォルト: 15）
+        delay_minutes (int): 遅延を考慮して現在時刻から引く分数（デフォルト: 0）
+
+    戻り値:
+        List[Dict]: ALBメトリクスを含む辞書のリスト:
+            - load_balancer_name (str): ALB名
+            - metrics (List[Dict]): 各メトリクスのリスト:
+                - 各メトリクス名 (float): メトリクスの値
+                - timestamp (str): 測定のタイムスタンプ
+    """
+    elbv2 = boto3.client("elbv2")
+    cloudwatch = boto3.client("cloudwatch")
+
+    # 時間範囲を計算
+    now = datetime.datetime.now(datetime.timezone.utc)
+    end_time = now - datetime.timedelta(minutes=delay_minutes)
+    start_time = end_time - datetime.timedelta(minutes=minutes_range)
+
+    # すべてのALBを取得
+    response = elbv2.describe_load_balancers()
+    application_lbs = [
+        alb for alb in response["LoadBalancers"] if alb["Type"] == "application"
+    ]
+
+    if not application_lbs:
+        print("Application Load Balancerが見つかりませんでした")
+        return []
+
+    # 収集するメトリクス
+    metric_configs = [
+        ("RequestCount", "Count", "request_count"),
+        ("TargetResponseTime", "Seconds", "target_response_time"),
+        ("HTTPCode_Target_4XX_Count", "Count", "http_code_target_4xx_count"),
+        ("HTTPCode_Target_5XX_Count", "Count", "http_code_target_5xx_count"),
+        ("HealthyHostCount", "Count", "healthy_host_count"),
+    ]
+
+    alb_metrics = []
+
+    # JSTタイムゾーンを定義
+    JST = timezone(timedelta(hours=9))
+
+    for alb in application_lbs:
+        load_balancer_name = alb["LoadBalancerName"]
+        dimension_value = "/".join(alb["LoadBalancerArn"].split("/")[1:])
+
+        # バッチ処理用のメトリクスクエリを準備
+        metric_queries = []
+        for i, (metric_name, unit, _) in enumerate(metric_configs):
+            metric_queries.append(
+                {
+                    "Id": f"m{i}",
+                    "MetricStat": {
+                        "Metric": {
+                            "Namespace": "AWS/ApplicationELB",
+                            "MetricName": metric_name,
+                            "Dimensions": [
+                                {"Name": "LoadBalancer", "Value": dimension_value}
+                            ],
+                        },
+                        "Period": 60,
+                        "Stat": "Average",
+                        "Unit": unit,
+                    },
+                }
+            )
+
+        # メトリクスを取得
+        metrics_response = cloudwatch.get_metric_data(
+            MetricDataQueries=metric_queries,
+            StartTime=start_time,
+            EndTime=end_time,
+            ScanBy="TimestampDescending",
+        )
+
+        # メトリクスデータを処理
+        interval_data = {}
+        for i, (_, _, metric_key) in enumerate(metric_configs):
+            result = metrics_response["MetricDataResults"][i]
+            for value, ts in zip(result["Values"], result["Timestamps"]):
+                rounded_ts = ts - datetime.timedelta(
+                    minutes=ts.minute % interval_minutes,
+                    seconds=ts.second,
+                    microseconds=ts.microsecond,
+                )
+                if rounded_ts not in interval_data:
+                    interval_data[rounded_ts] = {"timestamp": rounded_ts}
+                interval_data[rounded_ts][metric_key] = (
+                    interval_data[rounded_ts].get(metric_key, 0) + value
+                )
+
+        # 各intervalの平均を計算し、データを整形
+        metrics = []
+        for rounded_ts, data in interval_data.items():
+            # JSTに変換
+            jst_ts = rounded_ts.astimezone(JST)
+            formatted_data = {
+                "timestamp": jst_ts.strftime("%Y-%m-%d %H:%M"),
+            }
+            for key, value in data.items():
+                if key != "timestamp":
+                    formatted_data[key] = round(value, 2)
+            metrics.append(formatted_data)
+
+        # タイムスタンプでソート
+        metrics.sort(key=lambda x: x["timestamp"])
+
+        alb_metrics.append(
+            {
+                "load_balancer_name": load_balancer_name,
+                "metrics": metrics,
+            }
+        )
+
     return alb_metrics
 
 
@@ -193,3 +325,10 @@ if __name__ == "__main__":
                     print(f"  - {metric_name}: {value:.2f}")
             else:
                 print(f"  - {metric_name}: データなし")
+
+    # 使用例: 時間範囲内のメトリクスを取得
+    time_range_metrics = get_alb_metrics_over_time(60)  # 過去60分間のデータを取得
+    for alb_metrics in time_range_metrics:
+        print(f"ALB名: {alb_metrics['load_balancer_name']}")
+        for metric in alb_metrics["metrics"]:
+            print(f"  {metric} at {metric['timestamp']}")
