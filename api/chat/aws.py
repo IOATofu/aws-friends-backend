@@ -174,7 +174,7 @@ def get_response_from_json(conversation_json, model_id="anthropic.claude-3-5-hai
 
 
 
-def character_chat(arn,conversation_json,metrics, model_id="anthropic.claude-3-5-sonnet-20241022-v2:0", debug=False):
+def character_chat(arn,name,conversation_json,metrics, model_id="anthropic.claude-3-5-sonnet-20241022-v2:0", debug=False):
     if "elasticloadbalancing" in arn:    
         prompt = base_head_prompt + alb_prompt + base_foot_prompt
     elif "ec2" in arn:
@@ -183,6 +183,7 @@ def character_chat(arn,conversation_json,metrics, model_id="anthropic.claude-3-5
         prompt = base_head_prompt + rds_prompt + base_foot_prompt
     else:
         raise Exception(f"character_chat: サポートされていないARNです: {arn}")
+    prompt = prompt.replace("{instance_name}",name) 
     conversation_log=[{'role':x['role'],'content':x['message']} for x in conversation_json]
     chat_instance = Character(prompt=prompt, debug=debug)
     if conversation_log:

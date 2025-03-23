@@ -197,8 +197,8 @@ def get_alb_metrics_over_time(
         delay_minutes (int): 遅延を考慮して現在時刻から引く分数（デフォルト: 0）
 
     戻り値:
-        List[Dict]: ALBメトリクスを含む辞書のリスト:
-            - load_balancer_name (str): ALB名
+        List[Dict]: 各インスタンスのメトリクスを含む辞書のリスト:
+            - instance_id (str): インスタンスID
             - metrics (List[Dict]): 各メトリクスのリスト:
                 - 各メトリクス名 (float): メトリクスの値
                 - timestamp (str): 測定のタイムスタンプ
@@ -300,9 +300,12 @@ def get_alb_metrics_over_time(
         # タイムスタンプでソート
         metrics.sort(key=lambda x: x["timestamp"])
 
+        # インスタンスIDを取得（仮にLoadBalancerNameをインスタンスIDとする）
+        instance_id = load_balancer_name
+
         alb_metrics.append(
             {
-                "load_balancer_name": load_balancer_name,
+                "instance_id": instance_id,
                 "metrics": metrics,
             }
         )
@@ -329,6 +332,7 @@ if __name__ == "__main__":
     # 使用例: 時間範囲内のメトリクスを取得
     time_range_metrics = get_alb_metrics_over_time(60)  # 過去60分間のデータを取得
     for alb_metrics in time_range_metrics:
-        print(f"ALB名: {alb_metrics['load_balancer_name']}")
+        print(f"ALB名: {alb_metrics['instance_id']}")
         for metric in alb_metrics["metrics"]:
             print(f"  {metric} at {metric['timestamp']}")
+    print(time_range_metrics)

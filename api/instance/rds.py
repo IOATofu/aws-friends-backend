@@ -261,11 +261,10 @@ def get_rds_metrics_over_time(
         # metrics_by_timestampをリストに変換
         metrics = list(metrics_by_timestamp.values())
 
+        # インスタンスごとに結果を分けて出力
         rds_metrics.append(
             {
-                "range": f"{minutes_range} min",
-                "interval": f"{interval_minutes} min",
-                "db_instance_identifier": db_instance_identifier,
+                "instance_id": db_instance_identifier,  # インスタンスIDをキーとして使用
                 "metrics": metrics,
             }
         )
@@ -296,7 +295,7 @@ if __name__ == "__main__":
     # 使用例: 時間範囲内のメトリクスを取得
     time_range_metrics = get_rds_metrics_over_time(180)  # 過去60分間のデータを取得
     for instance_metrics in time_range_metrics:
-        print(f"RDSインスタンスID: {instance_metrics['db_instance_identifier']}")
+        print(f"RDSインスタンスID: {instance_metrics['instance_id']}")
         for metric in instance_metrics["metrics"]:
             print(f"  {metric} at {metric['timestamp']}")
     print(time_range_metrics)
