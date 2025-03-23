@@ -16,6 +16,7 @@ export default {
   },
   watch: {
     selectedinstance() {
+      this.chara_txt = ''
       this.click2(this.selectedinstance.arn,"")
     },
   },
@@ -31,50 +32,48 @@ export default {
 </script>
 
 <template>
-  <div class="body">
+  <div>
     <header>
-      Header!!!
+      <img src="/img/log.png" alt="Logo" />
     </header>
-    <input type="button" value="GetInstances" @click="click()" />
+    <div class="body">
+      <input type="button" value="GetInstances" @click="click()" />
 
-    <div class="instancelist" v-for="instance in instances" :key="instance">
-       <label>
-        <input type="radio" v-model="selectedinstance" :value="instance"/>
-        {{ instance.type }}/{{instance.name}}
-      </label>
-    </div>
-    <br><br>
-    
-    <div v-if="chara_txt != ''">
-      <p>選択されたインスタンス<br>
-      {{ selectedinstance.type }}/{{ selectedinstance.name }}:</p>
-      <textarea
-          v-model="chara_txt"
-          id="instanceTextArea"
-          rows="8"
-          cols="60"
-          readonly
-        />
-      <br>
+      <div class="instancelist" v-for="instance in instances" :key="instance">
+        <label>
+          <input type="radio" v-model="selectedinstance" :value="instance" />
+          {{ instance.type }}/{{instance.name}}
+        </label>
+      </div>
+      <br><br>
 
-      あなた:<br>
-      <textarea
-          v-model="user_txt"
-          id="userTextArea"
-          rows="8"
-          cols="60"
-        />
-      <input type="button" value="送信" @click="click2(selectedinstance.arn,user_txt)" />
+      <div v-if="chara_txt != ''">
+        <p>選択されたインスタンス<br>
+          {{ selectedinstance.type }}/{{ selectedinstance.name }}:</p>
+        <textarea v-model="chara_txt" id="instanceTextArea" rows="8" cols="60" readonly />
+        <br>
+
+        あなた:<br>
+        <textarea v-model="user_txt" id="userTextArea" rows="8" cols="60" />
+        <input type="button" value="送信" @click="click2(selectedinstance.arn,user_txt)" />
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+img{
+  max-width: 500px;
+}
 .body{
-  width: 100%;
+  width: 94%;
+  min-height: calc(100vh - 170px);
+  margin: 10px auto;
 }
 header {
-  width: 100%;
+  max-height: 150px;
+  display: flex;
+  justify-content: center;
   background-color: brown;
 }
 </style>
