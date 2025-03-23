@@ -12,28 +12,38 @@ export default {
       },
       log : [],
       chara_txt:'',
-      user_txt:''
+      user_txt:'',
+      load_flag: false
     }
   },
   watch: {
     selectedinstance() {
+      this.log = []
       this.click2()
     },
   },
   methods: {
     click: async function () {
-      this.instances = await tmpWebApi.getInstances()
+      if(this.load_flag == false){
+        this.load_flag = true
+        this.instances = await tmpWebApi.getInstances()
+        this.load_flag = false
+      }
     },
     click2: async function () {
-      var arn = this.selectedinstance.arn
-      var name = this.selectedinstance.name
-      this.log.push({
-              "role": "user",
-              "message": this.user_txt
-          })
-      var _response = await tmpWebApi.postTalk(arn,name,this.log)
-      this.log.push(_response)
-      this.chara_txt = _response.message
+      if(this.load_flag == false){
+        this.load_flag = true
+        var arn = this.selectedinstance.arn
+        var name = this.selectedinstance.name
+        this.log.push({
+                "role": "user",
+                "message": this.user_txt
+            })
+        var _response = await tmpWebApi.postTalk(arn,name,this.log)
+        this.log.push(_response)
+        this.chara_txt = _response.message
+        this.load_flag = false
+      }
     },
   }
 };
@@ -45,7 +55,9 @@ export default {
       <img src="/img/log.png" alt="Logo" />
     </header>
     <div class="body">
-      <input type="button" value="GetInstances" @click="click()" />
+      <div v-if="load_flag == false">
+        <input type="button" value="GetInstances" @click="click()" />
+      </div>
 
       <div class="instancelist" v-for="instance in instances" :key="instance">
         <label>
@@ -63,7 +75,9 @@ export default {
 
         あなた:<br>
         <textarea v-model="user_txt" id="userTextArea" rows="8" cols="60" />
-        <input type="button" value="送信" @click="click2()" />
+        <div v-if="load_flag == false">
+          <input type="button" value="送信" @click="click2()" />
+        </div>
       </div>
     </div>
   </div>
