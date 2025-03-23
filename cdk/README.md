@@ -1,19 +1,25 @@
-# Welcome to your CDK TypeScript project
+# AWD CDK
 
-This is a blank project for CDK development with TypeScript.
+AWDのリソースはCDKで管理します。
+コンソールで直接編集せず、CDKで変更してください。
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## 使い方
+事前にAWS CDKをインストールしてください。
+`npm install -g aws-cdk`
 
-## Useful commands
+- デプロイする
+`cdk deploy <Stack名>`
+- 削除する
+`cdk destroy <Stack名>`
+- デプロイの差分を確認する
+`cdk diff <Stack名>`
+- CloudFormationのテンプレートを確認する
+`cdk synth <Stack名>`
 
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+## 環境変数
+`ProgateHackathonPipelineStack`をデプロイする際は`.env.example`を参考に`.env`を作成してください。
+- DISCORD_WEBHOOK_URL
+通知先のDiscordのWebhook URL
+- DISCORD_MENTION_USER_ID
+エラーが発生した際にメンションを飛ばすユーザーのID
 
-
-## Dicordデプロイ
-
-`export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/xxxxx"`を実行してからデプロイしてください。

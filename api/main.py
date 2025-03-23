@@ -29,7 +29,6 @@ def get_metrics_by_arn(arn: str):
         raise Exception(f"get_metrics_by_arn: サポートされていないARNです: {arn}")
 
 
-
 # ロガーの設定
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -62,7 +61,7 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
                 )
             else:
                 # その他のGETエンドポイントは60秒間キャッシュ
-                response.headers["Cache-Control"] = "public, max-age=60"
+                response.headers["Cache-Control"] = "public, max-age=20"
         else:
             # POSTなどの変更を伴うリクエストはキャッシュしない
             response.headers["Cache-Control"] = (
@@ -158,6 +157,38 @@ async def get_costs(days: int = Query(default=30, ge=1, le=365)):
         List[Dict]: インスタンスごとの課金情報
     """
     return await get_instance_costs(days)
+
+
+def round_metrics(data):
+    """
+    メトリクスデータ内の数値を小数点以下2桁に丸めます。
+    """
+    if isinstance(data, float):
+        return round(data, 2)
+    elif isinstance(data, dict):
+        return {k: round_metrics(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [round_metrics(item) for item in data]
+    return data
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """
+    EC2、RDS、ALBの全てのメトリクス値を取得します。
+    デバッグ用のエンドポイントです。
+    全ての数値は小数点以下2桁に丸められます。
+    """
+    try:
+        metrics = {
+            "ec2": get_latest_ec2_metrics(),
+            "rds": get_latest_rds_metrics(),
+            "alb": get_latest_alb_metrics(),
+        }
+        return round_metrics(metrics)
+    except Exception as e:
+        logger.error(f"/metrics エンドポイントでエラーが発生: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":

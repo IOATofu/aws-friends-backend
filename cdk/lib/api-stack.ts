@@ -195,8 +195,13 @@ export class ApiStack extends cdk.Stack {
         elbv2.ListenerCondition.httpHeader('Access-Control-Request-Method', ['*']),
       ],
       action: elbv2.ListenerAction.fixedResponse(200, {
-        contentType: 'text/plain',
-        messageBody: '',
+        contentType: 'application/json',
+        messageBody: JSON.stringify({
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+          'Access-Control-Max-Age': '86400'
+        }),
       }),
     });
 
@@ -243,6 +248,20 @@ export class ApiStack extends cdk.Stack {
     );
 
     // CloudFrontディストリビューションの作成
+    // レスポンスヘッダーポリシーの設定
+    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'ApiResponseHeadersPolicy', {
+      responseHeadersPolicyName: 'ApiResponseHeadersPolicy',
+      comment: 'Response headers policy for API with CORS headers',
+      corsBehavior: {
+        accessControlAllowOrigins: ['*'],
+        accessControlAllowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        accessControlAllowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],
+        accessControlMaxAge: cdk.Duration.seconds(86400),
+        accessControlAllowCredentials: false,
+        originOverride: true,
+      },
+    });
+
     // キャッシュポリシーの設定（TTLを60秒に設定）
     const cachePolicy = new cloudfront.CachePolicy(this, 'ApiCachePolicy', {
       cachePolicyName: 'ApiCachePolicy',
@@ -297,6 +316,7 @@ export class ApiStack extends cdk.Stack {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         originRequestPolicy: apiOriginRequestPolicy,
+        responseHeadersPolicy: responseHeadersPolicy,
       },
       // 代替ドメイン名と証明書を追加（両方が指定されている場合のみ）
       // 注: CloudFrontの証明書はus-east-1リージョンに存在する必要があります
