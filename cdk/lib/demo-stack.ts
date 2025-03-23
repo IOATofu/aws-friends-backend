@@ -79,21 +79,9 @@ export class DemoStack extends cdk.Stack {
 
       // 必要なパッケージのインストール
       'yum update -y',
-      'yum install -y git python3 python3-pip',
-
-      // アプリケーションのデプロイ
-      'cd /home/ec2-user',
-      'git clone https://github.com/IOATofu/aws-friends-backend.git',
-      'cd aws-friends-backend/demo-app/backend',
-      'pip3 install -r requirements.txt',
-
-      // 環境変数の設定
-      'export DATABASE_URL="mysql://admin:${cluster.secret?.secretValueFromJson(\'password\').toString()}@${cluster.clusterEndpoint.hostname}:3306/awsfriends"',
-      'export HOST="0.0.0.0"',
-      'export PORT="80"',
-
-      // アプリケーションの起動
-      'sudo -E python3 main.py > /var/log/app.log 2>&1 &'
+      // stressコマンドを実行するために必要
+      'amazon-linux-extras install -y epel',
+      'yum install -y stress',
     );
 
     // Auto Scaling Groupの作成
@@ -108,9 +96,9 @@ export class DemoStack extends cdk.Stack {
       }),
       userData,
       securityGroup: ec2SecurityGroup,
-      minCapacity: 1,
-      maxCapacity: 3,
-      desiredCapacity: 1,
+      minCapacity: 2,
+      maxCapacity: 5,
+      desiredCapacity: 2,
       healthCheck: autoscaling.HealthCheck.elb({ grace: cdk.Duration.seconds(60) }),
     });
 
