@@ -54,6 +54,26 @@ export class PipelineStack extends cdk.Stack {
       codeBuildCloneOutput: true,
     });
 
+    const pushFilterJson = {
+      Branches: {
+        Includes: ['main'],
+      },
+      FilePaths: {
+        Includes: ['api/*', 'docker/api/*'],
+      },
+    };
+    const cfnPipeline = buildPipeline.node.defaultChild as codepipeline.CfnPipeline;
+    // Triggers プロパティを上書き
+    cfnPipeline.addPropertyOverride('Triggers', [
+      {
+        GitConfiguration: {
+          Push: [pushFilterJson],
+          SourceActionName: sourceAction.actionProperties.actionName,
+        },
+        ProviderType: 'CodeStarSourceConnection',
+      },
+    ]);
+
     // mainブランチのpushのみを検知するイベントルール
     const sourceRule = new events.Rule(this, 'SourceRule', {
       eventPattern: {
@@ -62,7 +82,9 @@ export class PipelineStack extends cdk.Stack {
         detail: {
           referenceType: ['branch'],
           referenceName: ['main'],
-          repositoryName: ['aws-friends-backend']
+          repositoryName: ['aws-friends-backend'],
+          path: ['api/*', 'docker/api/*'],
+          state: ['push']
         }
       }
     });
