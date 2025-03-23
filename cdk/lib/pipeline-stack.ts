@@ -84,16 +84,9 @@ export class PipelineStack extends cdk.Stack {
       input: sourceOutput,
     });
 
-    // ビルドパイプラインにステージを追加
-    buildPipeline.addStage({
-      stageName: 'Source',
-      actions: [sourceAction],
-    });
-
-    buildPipeline.addStage({
-      stageName: 'Build',
-      actions: [buildAction],
-    });
+    // ビルドパイプラインのステージ設定
+    buildPipeline.addStage({ stageName: 'Source', actions: [sourceAction] });
+    buildPipeline.addStage({ stageName: 'Build', actions: [buildAction] });
 
     // デプロイパイプラインの作成
     const deployPipeline = new codepipeline.Pipeline(this, 'DeployPipeline', {
@@ -135,7 +128,7 @@ export class PipelineStack extends cdk.Stack {
       imageFile: deployOutput.atPath('imageDefinitions.json'),
     });
 
-    // デプロイパイプラインのECRソース
+    // デプロイパイプラインのステージ設定
     const ecrSourceOutput = new codepipeline.Artifact();
     const ecrSourceAction = new codepipeline_actions.EcrSourceAction({
       actionName: 'ECR',
@@ -144,13 +137,6 @@ export class PipelineStack extends cdk.Stack {
       output: ecrSourceOutput,
     });
 
-    // デプロイパイプラインにステージを追加
-    deployPipeline.addStage({
-      stageName: 'Source',
-      actions: [ecrSourceAction],
-    });
-
-    // createImageDefActionのinputをECRソースに変更
     const createImageDefAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'CreateImageDefinitions',
       project: deployProject,
@@ -158,15 +144,10 @@ export class PipelineStack extends cdk.Stack {
       outputs: [deployOutput],
     });
 
-    deployPipeline.addStage({
-      stageName: 'CreateImageDef',
-      actions: [createImageDefAction],
-    });
-
-    deployPipeline.addStage({
-      stageName: 'Deploy',
-      actions: [deployAction],
-    });
+    // ステージの追加
+    deployPipeline.addStage({ stageName: 'Source', actions: [ecrSourceAction] });
+    deployPipeline.addStage({ stageName: 'CreateImageDef', actions: [createImageDefAction] });
+    deployPipeline.addStage({ stageName: 'Deploy', actions: [deployAction] });
 
     // ECRイメージ更新時のイベントルール作成
     const ecrImageRule = new events.Rule(this, 'EcrImageUpdateRule', {
@@ -242,8 +223,7 @@ export class PipelineStack extends cdk.Stack {
     // Lambda関数をターゲットとして追加
     pipelineStateRule.addTarget(new targets.LambdaFunction(pipelineFailureHandler));
 
-    // 出力の追加
-    // 出力の追加
+    // パイプライン名の出力
     new cdk.CfnOutput(this, 'BuildPipelineName', {
       value: buildPipeline.pipelineName,
       description: 'Build CodePipeline name',
