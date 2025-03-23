@@ -1,4 +1,11 @@
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
+
+// .envファイルを読み込む
+dotenv.config({
+  path: path.resolve(__dirname, '../.env')
+});
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
@@ -204,8 +211,10 @@ export class PipelineStack extends cdk.Stack {
       environment: {
         FAILURE_COUNT_TABLE: failureCountTable.tableName,
         MAX_FAILURES: '3',
-        DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || ''
+        DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || '',
+        DISCORD_MENTION_USER_ID: process.env.DISCORD_MENTION_USER_ID || ''
       },
+      description: 'Lambda function for pipeline state notifications. Required environment variables: DISCORD_WEBHOOK_URL, DISCORD_MENTION_USER_ID',
       timeout: cdk.Duration.seconds(30)
     });
 

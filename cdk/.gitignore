@@ -1,4 +1,6 @@
-*.js
+# environment variables
+.env
+# ot*.js
 !jest.config.js
 *.d.ts
 node_modules
