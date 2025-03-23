@@ -92,11 +92,11 @@ async def health_check():
 
 
 @app.post("/chat")
-async def chat(arn: str = Form()):
+async def chat(arn: str = Form(),name: str = Form()):
 
     metrics = get_metrics_by_arn(arn)
-
-    arn, message = character_chat(arn, [], metrics)
+    metrics = [x["metrics"] for x in metrics if x["instance_id"] in arn]
+    arn, message = character_chat(arn, name, [], metrics)
     # モックレスポンスを返す
     return {
         "arn": arn,
@@ -113,8 +113,10 @@ async def talk(data: dict = Body(...)):
     try:
         arn = data.get("arn")
         log = data.get("log")
+        name = data.get("name","")
         metrics = get_metrics_by_arn(arn)
-        arn, message = character_chat(arn, log, metrics)
+        metrics = [x["metrics"] for x in metrics if x["instance_id"] in arn]
+        arn, message = character_chat(arn, name, log, metrics)
         return {
             "arn": arn,
             "return_message": {
