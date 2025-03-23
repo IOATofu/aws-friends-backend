@@ -159,5 +159,37 @@ async def get_costs(days: int = Query(default=30, ge=1, le=365)):
     return await get_instance_costs(days)
 
 
+def round_metrics(data):
+    """
+    メトリクスデータ内の数値を小数点以下2桁に丸めます。
+    """
+    if isinstance(data, float):
+        return round(data, 2)
+    elif isinstance(data, dict):
+        return {k: round_metrics(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [round_metrics(item) for item in data]
+    return data
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """
+    EC2、RDS、ALBの全てのメトリクス値を取得します。
+    デバッグ用のエンドポイントです。
+    全ての数値は小数点以下2桁に丸められます。
+    """
+    try:
+        metrics = {
+            "ec2": get_latest_ec2_metrics(),
+            "rds": get_latest_rds_metrics(),
+            "alb": get_latest_alb_metrics(),
+        }
+        return round_metrics(metrics)
+    except Exception as e:
+        logger.error(f"/metrics エンドポイントでエラーが発生: {str(e)}")
+        raise
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8080, log_level="debug")
