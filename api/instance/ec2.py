@@ -214,8 +214,117 @@ def get_latest_ec2_metrics(
     return all_metrics
 
 
+def get_ec2_metrics_over_time(
+    minutes_range: int = 15, delay_minutes: int = 0, interval_minutes: int = 10
+) -> List[Dict[str, Union[str, List[Dict[str, Union[float, str]]]]]]:
+    """
+    すべてのEC2インスタンスの指定された時間範囲内のCPU使用率メトリクスを取得します。
+
+    引数:
+        minutes_range (int): メトリクスを取得する過去の分数（デフォルト: 15）
+        delay_minutes (int): 遅延を考慮して現在時刻から引く分数（デフォルト: 0）
+
+    戻り値:
+        List[Dict]: インスタンスメトリクスを含む辞書のリスト:
+            - instance_id (str): EC2インスタンスID
+            - metrics (List[Dict]): 各メトリクスのリスト:
+                - cpu_utilization (float): CPU使用率（パーセント）
+                - timestamp (str): 測定のタイムスタンプ
+    """
+    ec2 = boto3.client("ec2")
+    cloudwatch = boto3.client("cloudwatch")
+
+    # 時間範囲を計算
+    now = datetime.datetime.now(datetime.timezone.utc)
+    end_time = now - datetime.timedelta(minutes=delay_minutes)
+    start_time = end_time - datetime.timedelta(minutes=minutes_range)
+
+    # 全てのEC2インスタンスを取得（フィルタリングなし）
+    response = ec2.describe_instances()
+
+    # 処理対象のインスタンスを抽出
+    instances = []
+    for reservation in response["Reservations"]:
+        for instance in reservation["Instances"]:
+            instances.append(instance["InstanceId"])
+
+    if not instances:
+        print("EC2インスタンスが見つかりませんでした")
+        return []
+
+    # 最大20インスタンスずつバッチ処理（CloudWatchの制限）
+    batch_size = 20
+    all_metrics = []
+
+    for i in range(0, len(instances), batch_size):
+        batch_ids = instances[i : i + batch_size]
+
+        # バッチ処理用のメトリクスクエリを準備
+        metric_queries = []
+        for j, instance_id in enumerate(batch_ids):
+            metric_queries.append(
+                {
+                    "Id": f"cpu{j}",
+                    "MetricStat": {
+                        "Metric": {
+                            "Namespace": "AWS/EC2",
+                            "MetricName": "CPUUtilization",
+                            "Dimensions": [
+                                {"Name": "InstanceId", "Value": instance_id}
+                            ],
+                        },
+                        "Period": 60,  # 1分間隔
+                        "Stat": "Average",
+                        "Unit": "Percent",
+                    },
+                }
+            )
+
+        # メトリクスを取得
+        metrics_response = cloudwatch.get_metric_data(
+            MetricDataQueries=metric_queries,
+            StartTime=start_time,
+            EndTime=end_time,
+            ScanBy="TimestampDescending",
+        )
+
+        # メトリクスデータを処理
+        for j, instance_id in enumerate(batch_ids):
+            result = metrics_response["MetricDataResults"][j]
+            metrics = []
+
+            # interval_minutesごとに平均を計算
+            interval_start = start_time
+            while interval_start < end_time:
+                interval_end = interval_start + datetime.timedelta(minutes=interval_minutes)
+                interval_values = [
+                    value for value, ts in zip(result["Values"], result["Timestamps"])
+                    if interval_start <= ts < interval_end
+                ]
+
+                if interval_values:
+                    avg_cpu = sum(interval_values) / len(interval_values)
+                    metrics.append(
+                        {
+                            "cpu_utilization": round(avg_cpu, 2),
+                            "timestamp": interval_start.strftime("%Y-%m-%d %H:%M"),
+                        }
+                    )
+
+                interval_start = interval_end
+
+            all_metrics.append(
+                {
+                    "instance_id": instance_id,
+                    "metrics": metrics,
+                }
+            )
+
+    return all_metrics
+
+
 if __name__ == "__main__":
-    # 使用例
+    # 使用例: 最新のメトリクスを取得
     metrics = get_latest_ec2_metrics()
     for metric in metrics:
         if metric["cpu_utilization"] is not None:
@@ -226,3 +335,13 @@ if __name__ == "__main__":
             print(
                 f"{metric['instance_id']} ({metric['instance_name']}) - CPUデータが見つかりません"
             )
+
+    # 使用例: 時間範囲内のメトリクスを取得
+    time_range_metrics = get_ec2_metrics_over_time(180, 10)  # 過去12時間のデータを取得
+    for instance_metrics in time_range_metrics:
+        print(f"インスタンスID: {instance_metrics['instance_id']}")
+        for metric in instance_metrics["metrics"]:
+            print(
+                f"  CPU: {metric['cpu_utilization']:.2f}% at {metric['timestamp']}"
+            )
+    print(time_range_metrics)

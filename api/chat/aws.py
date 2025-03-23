@@ -187,5 +187,5 @@ def character_chat(arn,conversation_json,metrics, model_id="anthropic.claude-3-5
     chat_instance = Character(prompt=prompt, debug=debug)
     if conversation_log:
         chat_instance.add_messages(conversation_log)
-    chat_instance.add_message('user',f"metrics_data: {metrics}")
+    chat_instance.add_message('user',"-"*10+f"metrics_data: {metrics}\n\nこのメトリクスデータは会話に必要な時に利用してください"+"-"*10)
     return arn,chat_instance.get_llm_response(model_id)

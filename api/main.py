@@ -8,6 +8,9 @@ from instance import (
     get_latest_ec2_metrics,
     get_latest_rds_metrics,
     get_latest_alb_metrics,
+    get_alb_metrics_over_time,
+    get_ec2_metrics_over_time,
+    get_rds_metrics_over_time,
 )
 from chat import get_response_from_json, character_chat
 import logging
@@ -19,12 +22,21 @@ app = FastAPI()
 
 
 def get_metrics_by_arn(arn: str):
+    """
+    ARNに基づいてメトリクスを取得する関数。
+    
+    Args:
+        arn (str): インスタンスのARN
+
+    """
+    RANGE = 180
+    INTERVAL = 10
     if "elasticloadbalancing" in arn:
-        return get_latest_alb_metrics()
+        return get_alb_metrics_over_time(minutes_range=RANGE, interval_minutes=INTERVAL)
     elif "ec2" in arn:
-        return get_latest_ec2_metrics()
+        return get_ec2_metrics_over_time(minutes_range=RANGE, interval_minutes=INTERVAL)
     elif "rds" in arn:
-        return get_latest_rds_metrics()
+        return get_rds_metrics_over_time(minutes_range=RANGE, interval_minutes=INTERVAL)
     else:
         raise Exception(f"get_metrics_by_arn: サポートされていないARNです: {arn}")
 
