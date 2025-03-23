@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import { DevopsStack } from '../lib/devops-stack';
 import { ApiStack } from '../lib/api-stack';
 import { PipelineStack } from '../lib/pipeline-stack';
+import { DemoStack } from '../lib/demo-stack';
 
 const app = new cdk.App();
 
@@ -18,6 +19,9 @@ const commonProps = {
     ManagedBy: 'cdk'
   }
 };
+
+// デモスタック（EC2、RDS、ALBの作成）
+new DemoStack(app, 'ProgateHackathonDemoStack', commonProps);
 
 // DevOpsスタック（ECRリポジトリの作成）
 const devopsStack = new DevopsStack(app, 'ProgateHackathonDevopsStack', commonProps);
