@@ -24,13 +24,14 @@ export default {
     click: async function () {
       this.instances = await tmpWebApi.getInstances()
     },
-    click2: async function (arn,message) {
+    click2: async function () {
       var arn = this.selectedinstance.arn
+      var name = this.selectedinstance.name
       this.log.push({
               "role": "user",
               "message": this.user_txt
           })
-      var _response = await tmpWebApi.postTalk(arn,this.log)
+      var _response = await tmpWebApi.postTalk(arn,name,this.log)
       this.log.push(_response)
       this.chara_txt = _response.message
     },
@@ -62,7 +63,7 @@ export default {
 
         あなた:<br>
         <textarea v-model="user_txt" id="userTextArea" rows="8" cols="60" />
-        <input type="button" value="送信" @click="click2(selectedinstance.arn,user_txt)" />
+        <input type="button" value="送信" @click="click2()" />
       </div>
     </div>
   </div>
@@ -70,17 +71,39 @@ export default {
 
 <style scoped>
 img{
+  width: 100%;
   max-width: 500px;
 }
-.body{
-  width: 94%;
-  min-height: calc(100vh - 170px);
-  margin: 10px auto;
+@media screen and (max-width: 700px){
+  .body{
+    width: 90%;
+    margin: 10px auto;
+    word-wrap: break-word;
+  }
+  header {
+    max-height: 150px;
+    display: flex;
+    justify-content: center;
+    background-color: brown;
+  }
+  textarea{
+    width: 100%;
+  }
+  button{
+    text-align: center;
+  }
 }
-header {
-  max-height: 150px;
-  display: flex;
-  justify-content: center;
-  background-color: brown;
+@media screen and (min-width: 701px) {
+  .body{
+    width: 95%;
+    min-height: calc(100vh - 170px);
+    margin: 10px auto;
+  }
+  header {
+    max-height: 150px;
+    display: flex;
+    justify-content: center;
+    background-color: brown;
+  }
 }
 </style>

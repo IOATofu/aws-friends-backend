@@ -16,7 +16,7 @@ export default {
             console.error("データ取得に失敗しました", error);
         }
     },
-    postTalk: async function (arn, log) {
+    postTalk: async function (arn, name, log) {
         const options = {
             headers: {
                 "content-type": "application/json",
@@ -24,6 +24,7 @@ export default {
         }
         const contents = {
             "arn": arn,
+            "name": name,
             "log": log
         }
         console.log(contents)
