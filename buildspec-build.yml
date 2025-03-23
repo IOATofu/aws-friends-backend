@@ -5,14 +5,7 @@ phases:
     commands:
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
-      - echo "Setting repository URI..."
-      - |
-        if [ -z "${ECR_REPOSITORY_NAME}" ]; then
-          echo "Error: ECR_REPOSITORY_NAME is not set"
-          exit 1
-        fi
       - REPOSITORY_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}
-      - echo "Repository URI: ${REPOSITORY_URI}"
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
   
   build:
