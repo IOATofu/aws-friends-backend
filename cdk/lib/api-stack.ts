@@ -115,9 +115,10 @@ export class ApiStack extends cdk.Stack {
     this.service = new ecs.FargateService(this, 'ApiService', {
       cluster: this.cluster,
       taskDefinition: this.taskDefinition,
-      desiredCount: 2,
+      desiredCount: 20,
+      // 負荷に応じて自動的にスケーリング
       assignPublicIp: false,
-      minHealthyPercent: 100,
+      minHealthyPercent: 50,
     });
 
     // ALBの作成
@@ -380,8 +381,8 @@ export class ApiStack extends cdk.Stack {
 
     // 新しいタスク定義を作成
     const newTaskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDefWithEcr', {
-      memoryLimitMiB: 512,
-      cpu: 256,
+      memoryLimitMiB: 1024,
+      cpu: 512,
       taskRole: this.taskDefinition.taskRole,
     });
 
